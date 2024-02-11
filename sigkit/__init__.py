@@ -51,6 +51,7 @@ if core_ui_enabled():
 		funcs = {}
 		for func in bv.functions:
 			if bv.get_symbol_at(func.start) is None: continue
+			if func.name.startswith('.'): continue
 			func_node, info = generate_function_signature(func, guess_relocs)
 			funcs[func_node] = info
 			log.log_debug('Processed ' + func.name)

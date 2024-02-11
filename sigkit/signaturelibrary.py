@@ -361,19 +361,30 @@ class TrieNode(object):
 		:return: a list of `FunctionNode`s which match the given bytes
 		"""
 		if not self.pattern.matches(buf):
+			print('no match', self)
 			return [] # no match
 
 		matches = []
 		if self.value is not None:
 			matches.extend(self.value)
 
-		if len(self.pattern) == len(buf): return matches
+		if len(self.pattern) == len(buf):
+			print('return matches1', len(self.pattern), len(buf))
+			return matches
 		buf = buf[len(self.pattern):]
 
-		next_byte = buf[0]
+		next_byte = MaskedByte.new(buf[0], 1)
+		# print('next_byte', next_byte)
 		if next_byte in self.children:
+			# print('trying children1', self.children[next_byte])
 			matches.extend(self.children[next_byte].find(buf))
 
+		wildcard = MaskedByte.wildcard
+		if wildcard in self.children:
+			# print('trying children2', self.children[wildcard])
+			matches.extend(self.children[wildcard].find(buf))
+
+		# print('return matches2', matches)
 		return matches
 
 	def _is_degenerate(self):

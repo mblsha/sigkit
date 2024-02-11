@@ -46,8 +46,10 @@ class SignatureMatcher(object):
 
 	def resolve_thunk(self, func, level=0):
 		if sigkit.compute_sig.get_func_len(func) >= 8:
+			# print('resolve_thunk: not modified')
 			return func
 
+		print('resolve_thunk...')
 		first_insn = func.mlil[0]
 		if first_insn.operation == MediumLevelILOperation.MLIL_TAILCALL:
 			thunk_dest = self.bv.get_function_at(first_insn.dest.value.value)
@@ -146,8 +148,9 @@ class SignatureMatcher(object):
 			return 1
 
 		callees = self.compute_func_callees(func)
+		# print('callees', callees, 'for', func, 'func_node', func_node)
 		for call_site in callees:
-			if call_site not in func_node:
+			if call_site not in func_node.callees:
 				print((' ' * level) + 'call sites mismatch!')
 				return 2
 		for call_site, callee in func_node.callees.items():
@@ -156,6 +159,7 @@ class SignatureMatcher(object):
 				return 2
 
 		for call_site in callees:
+			print('callees', callees, 'call_site', call_site, 'func_node', func_node, 'callees', func_node.callees)
 			if self.does_func_match(callees[call_site], func_node.callees[call_site], visited, level + 1) != 999:
 				print((' '*level) + 'callee ' + func_node.callees[call_site].name + ' mismatch!')
 				return 3
@@ -170,9 +174,13 @@ class SignatureMatcher(object):
 		Try to sig the given function.
 		Return the list of signatures the function matched against
 		"""
+		# if func.name != 'PutDrawEnv':
+		# 	return []
 		func_len = sigkit.compute_sig.get_func_len(func)
 		func_data = self.bv.read(func.start, func_len)
 		trie_matches = self.sig_trie.find(func_data)
+		print('>> trie_matches', trie_matches)
+
 		best_score, results = 0, []
 		for candidate_func in trie_matches:
 			score = self.does_func_match(func, candidate_func, {})
@@ -181,14 +189,17 @@ class SignatureMatcher(object):
 				best_score = score
 			elif score == best_score:
 				results.append(candidate_func)
+
 		if len(results) == 0:
-			print(func.name, '=>', 'no match', end=", ")
 			for x in self.sig_trie.all_values():
 				if x.name == func.name:
-					print('but there was a signature from', x.source_binary)
-					break
-			else:
-				print('but this is OK.')
+					print(func.name, '=>', 'no match', end=", ")
+					print('but there was a signature from', x)
+					print('func_len', func_len)
+					print('')
+			# 		break
+			# else:
+			# 	print('but this is OK.')
 			assert best_score == 0
 			return results
 		elif len(results) > 1:
