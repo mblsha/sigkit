@@ -131,9 +131,16 @@ class SignatureMatcher(object):
             callees[ref.address - func.start] = self.bv.get_function_at(callee_addrs[0])
         return callees
 
+    # return value: score, more == better
+    # 0: no match
+    # 1: bytes match, but disambiguation mismatch
+    # 2: bytes + disambiguation match, but callee count mismatch
+    # 3: bytes + disambiguation match, but callees mismatch
+    # 999: full match
     def does_func_match(self, func, func_node, visited, level=0):
         if func_node and func_node.name == "GetGraphDebug":
             return 0
+
         print(
             (" " * level) + "compare",
             "None" if not func else func.name,
@@ -226,7 +233,7 @@ class SignatureMatcher(object):
         Return the list of signatures the function matched against
         """
         # if func.name != 'PutDrawEnv':
-        # 	return []
+        #     return []
         func_len = sigkit.compute_sig.get_func_len(func)
         func_data = self.bv.read(func.start, func_len)
         trie_matches = self.sig_trie.find(func_data)
@@ -246,9 +253,9 @@ class SignatureMatcher(object):
                 if x.name == func.name:
                     print(func.name, "=>", "no match", end=", ")
                     print("but there was a signature from", x)
-            # 		break
+            #         break
             # else:
-            # 	print('but this is OK.')
+            #     print('but this is OK.')
             assert best_score == 0
             return results
         elif len(results) > 1:
