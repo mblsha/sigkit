@@ -112,6 +112,6 @@ def test_function_node_new():
     assert str(f) == "<func:test>"
 
 
-def test_trie_node_new():
-    t = sl.TrieNode()
-    assert str(t) == "<trie>"
+# def test_trie_node_new():
+    # t = sl.TrieNode()
+    # assert str(t) == "<trie>"

@@ -43,16 +43,17 @@ from binaryninja import SymbolType
 
 from . import signaturelibrary
 
+
 def are_names_compatible(a, b):
-	if a == b:
-		return True
-	if a.name == b.name:
-		return True
-	if a.name.startswith(b.name) or b.name.startswith(a.name):
-		return True
-	if len(a.name) > 12 and len(b.name) > 12:
-		return a.name in b.name or b.name in a.name
-	return False
+    if a == b:
+        return True
+    if a.name == b.name:
+        return True
+    if a.name.startswith(b.name) or b.name.startswith(a.name):
+        return True
+    if len(a.name) > 12 and len(b.name) > 12:
+        return a.name in b.name or b.name in a.name
+    return False
 
 
 # mathematically speaking, this is defines a less-than-or-equal-to operation over the
@@ -87,229 +88,247 @@ def are_names_compatible(a, b):
 # in this case, we only need function info for the nodes we're trying to merge in by exploiting
 # the signature trie. We know A <= B if searching for A's data in the trie matches B.
 def is_signature_subset(a, func_info, b, sig_trie, visited):
-	"""
-	:param a: FunctionNode to check whether is a subset of B
-	:param func_info: dict containing the function info for A's trie
-	:param b: FunctionNode to check whether it contains A
-	:param sig_trie: the trie B belongs to.
-	:param visited: visited set, should be initialized to {}
-	:return: whether A matches a subset of what B matches
-	"""
-	if a == b:
-		return True
-	if int(a is None) < int(b is None):
-		return True
-	if int(a is None) > int(b is None):
-		return False
-	assert isinstance(a, signaturelibrary.FunctionNode)
-	assert isinstance(b, signaturelibrary.FunctionNode)
-	assert a in func_info
+    """
+    :param a: FunctionNode to check whether is a subset of B
+    :param func_info: dict containing the function info for A's trie
+    :param b: FunctionNode to check whether it contains A
+    :param sig_trie: the trie B belongs to.
+    :param visited: visited set, should be initialized to {}
+    :return: whether A matches a subset of what B matches
+    """
+    if a == b:
+        return True
+    if int(a is None) < int(b is None):
+        return True
+    if int(a is None) > int(b is None):
+        return False
+    assert isinstance(a, signaturelibrary.FunctionNode)
+    assert isinstance(b, signaturelibrary.FunctionNode)
+    assert a in func_info
 
-	# this is essentially a dfs on the callgraph. if we encounter a backedge,
-	# treat it optimistically, implying that the callers match if the callees match.
-	# however, we track our previous assumptions, meaning that if we previously
-	# optimistically assumed b == a, then later on if we compare b and c, we say
-	# that b != c since we already assumed b == a (and we already checked above that c != a).
-	if b in visited:
-		return visited[b] == a
-	visited[b] = a
+    # this is essentially a dfs on the callgraph. if we encounter a backedge,
+    # treat it optimistically, implying that the callers match if the callees match.
+    # however, we track our previous assumptions, meaning that if we previously
+    # optimistically assumed b == a, then later on if we compare b and c, we say
+    # that b != c since we already assumed b == a (and we already checked above that c != a).
+    if b in visited:
+        return visited[b] == a
+    visited[b] = a
 
-	# if A is bridge, but B isn't, A is obviously more ambiguous than B. (and vice versa)
-	if int(a.is_bridge) < int(b.is_bridge):
-		return True
-	if int(a.is_bridge) > int(b.is_bridge):
-		return False
+    # if A is bridge, but B isn't, A is obviously more ambiguous than B. (and vice versa)
+    if int(a.is_bridge) < int(b.is_bridge):
+        return True
+    if int(a.is_bridge) > int(b.is_bridge):
+        return False
 
-	if not b.is_bridge:
-		for a_pattern in func_info[a].patterns:
-			# if A is a subset of B, then B >= A; i.e., searching the trie for A's data should match B.
-			# A <= B --> A ⨅ B = B
-			if b not in sig_trie.find(a_pattern):
-				return False
+    if not b.is_bridge:
+        for a_pattern in func_info[a].patterns:
+            # if A is a subset of B, then B >= A; i.e., searching the trie for A's data should match B.
+            # A <= B --> A ⨅ B = B
+            if b not in sig_trie.find(a_pattern):
+                return False
 
-	# return false if B's additional pattern doesn't match A (B ⨅ A != B)
-	for a_pattern in func_info[a].patterns:
-		if b.pattern_offset >= 0 and b.pattern_offset + len(b.pattern) < len(a_pattern):
-			if not b.pattern.matches(a_pattern[b.pattern_offset:]):
-				return False
+    # return false if B's additional pattern doesn't match A (B ⨅ A != B)
+    for a_pattern in func_info[a].patterns:
+        if b.pattern_offset >= 0 and b.pattern_offset + len(b.pattern) < len(a_pattern):
+            if not b.pattern.matches(a_pattern[b.pattern_offset :]):
+                return False
 
-	# check that all callees required by B are also required by A
-	for call_site, callee in b.callees.items():
-		if callee is not None and call_site not in a.callees:
-			return False
-	if not all(map(lambda k: is_signature_subset(a.callees[k] if k in a.callees else None, func_info,
-												 b.callees[k], sig_trie, visited), b.callees)):
-		return False
+    # check that all callees required by B are also required by A
+    for call_site, callee in b.callees.items():
+        if callee is not None and call_site not in a.callees:
+            return False
+    if not all(
+        map(
+            lambda k: is_signature_subset(
+                a.callees[k] if k in a.callees else None,
+                func_info,
+                b.callees[k],
+                sig_trie,
+                visited,
+            ),
+            b.callees,
+        )
+    ):
+        return False
 
-	return True
+    return True
 
 
 def rewrite_callgraph(funcs, to_delete):
-	# complete the DFS first, avoid simultaneous modification and traversal
-	inverse_callgraph = defaultdict(set)
-	for func in funcs:
-		if func in to_delete: continue
-		for callee in func.callees.values():
-			if callee in to_delete:
-				inverse_callgraph[callee].add(func)
+    # complete the DFS first, avoid simultaneous modification and traversal
+    inverse_callgraph = defaultdict(set)
+    for func in funcs:
+        if func in to_delete:
+            continue
+        for callee in func.callees.values():
+            if callee in to_delete:
+                inverse_callgraph[callee].add(func)
 
-	def follow(k):
-		while k in to_delete:
-			k = to_delete[k]
-		return k
+    def follow(k):
+        while k in to_delete:
+            k = to_delete[k]
+        return k
 
-	# rewrite callgraph
-	for k in to_delete:
-		v = follow(k)
-		for func in inverse_callgraph[k]:
-			for call_site in func.callees:
-				if func.callees[call_site] == k:
-					func.callees[call_site] = v
-					assert k != v
-					# print('replace', k.name, id(k), '=>', v.name, id(v),'in', func.name)
+    # rewrite callgraph
+    for k in to_delete:
+        v = follow(k)
+        for func in inverse_callgraph[k]:
+            for call_site in func.callees:
+                if func.callees[call_site] == k:
+                    func.callees[call_site] = v
+                    assert k != v
+                    # print('replace', k.name, id(k), '=>', v.name, id(v),'in', func.name)
 
 
 def rewrite_trie(sig_trie, to_delete, update=False):
-	def follow(k):
-		while k in to_delete:
-			k = to_delete[k]
-		return k
+    def follow(k):
+        while k in to_delete:
+            k = to_delete[k]
+        return k
 
-	# rewrite trie values
-	for node in sig_trie.all_nodes():
-		if not node.value: continue
-		new_value = []
-		for func in node.value:
-			func.ref_count -= 1
-			if func in to_delete:
-				if update:
-					v = follow(func)
-					if v not in new_value:
-						v.ref_count += 1
-						new_value.append(v)
-			else:
-				if func not in new_value:
-					func.ref_count += 1
-					new_value.append(func)
-		node.value = new_value
+    # rewrite trie values
+    for node in sig_trie.all_nodes():
+        if not node.value:
+            continue
+        new_value = []
+        for func in node.value:
+            func.ref_count -= 1
+            if func in to_delete:
+                if update:
+                    v = follow(func)
+                    if v not in new_value:
+                        v.ref_count += 1
+                        new_value.append(v)
+            else:
+                if func not in new_value:
+                    func.ref_count += 1
+                    new_value.append(func)
+        node.value = new_value
 
-	# dfs; delete functionless subtries
-	def prune(node):
-		if not node.children:
-			should_delete = not node.value
-			return should_delete
-		new_children = {}
-		for b, c in node.children.items():
-			should_delete = prune(c)
-			if not should_delete:
-				new_children[b] = c
-		node.children = new_children
-		should_delete = not node.children and not node.value
-		return should_delete
-	prune(sig_trie)
+    # dfs; delete functionless subtries
+    def prune(node):
+        if not node.children:
+            should_delete = not node.value
+            return should_delete
+        new_children = {}
+        for b, c in node.children.items():
+            should_delete = prune(c)
+            if not should_delete:
+                new_children[b] = c
+        node.children = new_children
+        should_delete = not node.children and not node.value
+        return should_delete
+
+    prune(sig_trie)
 
 
 # one-way deduplication (trie1 to trie2)
 def find_redundant(trie1, info1, trie2):
-	cache = {}
-	def cached_is_signature_subset(a, func_info, b, sig_trie, visited):
-		if (a, b) in cache:
-			return cache[(a, b)]
-		result = is_signature_subset(a, func_info, b, sig_trie, visited)
-		cache[(a, b)] = result
-		return result
+    cache = {}
 
+    def cached_is_signature_subset(a, func_info, b, sig_trie, visited):
+        if (a, b) in cache:
+            return cache[(a, b)]
+        result = is_signature_subset(a, func_info, b, sig_trie, visited)
+        cache[(a, b)] = result
+        return result
 
-	# search trie2 for funcs from trie1. if `A` is matched by `B`, then `A` matches a subset of `B`
-	# and should be discarded. references to `A` should be replaced by references to `B`.
-	# algebraically if A ⨅ B = A, then A <= B, so A is redundant.
-	to_delete = {}
+    # search trie2 for funcs from trie1. if `A` is matched by `B`, then `A` matches a subset of `B`
+    # and should be discarded. references to `A` should be replaced by references to `B`.
+    # algebraically if A ⨅ B = A, then A <= B, so A is redundant.
+    to_delete = {}
 
-	def check_if_redundant(func_a, func_b):
-		while func_b in to_delete:  # avoid cycles
-			func_b = to_delete[func_b]
-		if func_a == func_b: # avoid infinite loop
-			return False
-		if not are_names_compatible(func_a, func_b):
-			return False
-		if cached_is_signature_subset(func_a, info1, func_b, trie2, {}):  # func <= cand. func is redundant
-			to_delete[func_a] = func_b
-			return True
-		return False
+    def check_if_redundant(func_a, func_b):
+        while func_b in to_delete:  # avoid cycles
+            func_b = to_delete[func_b]
+        if func_a == func_b:  # avoid infinite loop
+            return False
+        if not are_names_compatible(func_a, func_b):
+            return False
+        if cached_is_signature_subset(
+            func_a, info1, func_b, trie2, {}
+        ):  # func <= cand. func is redundant
+            to_delete[func_a] = func_b
+            return True
+        return False
 
-	for func in info1: # func is our `A`
-		for pattern in info1[func].patterns:
-			candidates = trie1.find(pattern)
-			for cand in candidates: # cand is our `B`
-				check_if_redundant(func, cand)
+    for func in info1:  # func is our `A`
+        for pattern in info1[func].patterns:
+            candidates = trie1.find(pattern)
+            for cand in candidates:  # cand is our `B`
+                check_if_redundant(func, cand)
 
-	# also clean up useless bridge nodes
-	bridges1 = list(filter(lambda f: f.is_bridge, info1))
-	bridges2 = list(filter(lambda f: f.is_bridge, trie2.all_functions()))
-	for func in bridges1:
-		for cand in bridges2:
-			check_if_redundant(func, cand)
+    # also clean up useless bridge nodes
+    bridges1 = list(filter(lambda f: f.is_bridge, info1))
+    bridges2 = list(filter(lambda f: f.is_bridge, trie2.all_functions()))
+    for func in bridges1:
+        for cand in bridges2:
+            check_if_redundant(func, cand)
 
-	return to_delete
+    return to_delete
 
 
 # Would it be ok substitute A with B if they have the same name? In that case, trie position is irrelevant as
 # we can just have multiple leaf nodes pointing to the same function node
 def can_substitute(a, b):
-	if a == b: return True
-	if (b is None) != (a is None): return False
-	assert isinstance(a, signaturelibrary.FunctionNode)
-	assert isinstance(b, signaturelibrary.FunctionNode)
+    if a == b:
+        return True
+    if (b is None) != (a is None):
+        return False
+    assert isinstance(a, signaturelibrary.FunctionNode)
+    assert isinstance(b, signaturelibrary.FunctionNode)
 
-	if not are_names_compatible(a, b):
-		return False
+    if not are_names_compatible(a, b):
+        return False
 
-	# if A is bridge, but B isn't, A is obviously more ambiguous than B.
-	if int(a.is_bridge) < int(b.is_bridge):
-		return False
+    # if A is bridge, but B isn't, A is obviously more ambiguous than B.
+    if int(a.is_bridge) < int(b.is_bridge):
+        return False
 
-	# check that all callees required by B are also required by A
-	for call_site, callee in b.callees.items():
-		if callee is not None and call_site not in a.callees:
-			return False
+    # check that all callees required by B are also required by A
+    for call_site, callee in b.callees.items():
+        if callee is not None and call_site not in a.callees:
+            return False
 
-	return True
+    return True
+
 
 # deal with signatures with the same name at different parts in the signature trie that can be merged
 def collapse_by_name(func_info):
-	by_name = defaultdict(set)
-	for f in func_info:
-		by_name[f.name].add(f)
-	to_delete = {}
-	for family in by_name.values():
-		for func in family:
-			for cand in family:
-				while cand in to_delete: # avoid cycles
-					cand = to_delete[cand]
-				if func == cand: # avoid infinite loop
-					continue
-				if can_substitute(func, cand):
-					to_delete[func] = cand
-					# transfer patterns and aliases from deleted functioninfo to cand's
-					cand_info = func_info[cand]
-					deleted_info = func_info[func]
-					cand_info.patterns.extend(deleted_info.patterns)
-					cand_info.aliases.extend(deleted_info.aliases)
-					deleted_info.patterns = [] # free memory (!)
-					deleted_info.aliases = []
-	return to_delete
+    by_name = defaultdict(set)
+    for f in func_info:
+        by_name[f.name].add(f)
+    to_delete = {}
+    for family in by_name.values():
+        for func in family:
+            for cand in family:
+                while cand in to_delete:  # avoid cycles
+                    cand = to_delete[cand]
+                if func == cand:  # avoid infinite loop
+                    continue
+                if can_substitute(func, cand):
+                    to_delete[func] = cand
+                    # transfer patterns and aliases from deleted functioninfo to cand's
+                    cand_info = func_info[cand]
+                    deleted_info = func_info[func]
+                    cand_info.patterns.extend(deleted_info.patterns)
+                    cand_info.aliases.extend(deleted_info.aliases)
+                    deleted_info.patterns = []  # free memory (!)
+                    deleted_info.aliases = []
+    return to_delete
 
 
 def sanity_check(sig_trie):
-	if not sig_trie.children:
-		sys.stderr.write('Warning: no functions in trie\n')
-		return
+    if not sig_trie.children:
+        sys.stderr.write("Warning: no functions in trie\n")
+        return
 
-	count = defaultdict(lambda: 0)
-	for func in sig_trie.all_values():
-		count[func] += 1
-	for func in sig_trie.all_functions():
-		assert func.ref_count == count[func]
+    count = defaultdict(lambda: 0)
+    for func in sig_trie.all_values():
+        count[func] += 1
+    for func in sig_trie.all_functions():
+        assert func.ref_count == count[func]
 
 
 # we avoid linking across library boundaries ... they're discrete compilation units and we shouldn't assume
@@ -318,166 +337,194 @@ def sanity_check(sig_trie):
 # the call will turn into a stub (like jump 0x0), and will not be a call in the real binary.
 # so, we give that a wildcard. in our matching algorithm, we allow calls to wildcard callee to be optional.
 def resolve_reference(name, sym_type, source_binary, source_to_node):
-	if sym_type == SymbolType.FunctionSymbol:
-		# look for callee from the same object file
-		if source_binary in source_to_node:
-			result = source_to_node[source_binary]
-			# print('resolved static reference', name, '=', result.name, 'from', source_binary)
-			return result
-		else:
-			# sys.stderr.write('Warning: missing static reference ' + name + ' from ' + source_binary + '\n')
-			return None
-	else:
-		# look for callee in a different object file
-		possible_callees = []
-		for source in source_to_node:
-			if source != source_binary:
-				possible_callees.append(source_to_node[source])
-		if not possible_callees:
-			# sys.stderr.write('Warning: missing extern reference ' + name + ' from ' + source_binary + '\n')
-			return None
-		elif len(possible_callees) > 1:
-			# sys.stderr.write('Warning: multiple definitions for external reference ' + name + ' from ' + source_binary + ': '+ ', '.join(map(lambda n: n.name, possible_callees)) + '\n')
-			return None
-		else:
-			# print('resolved extern reference', name, '=', possible_callees[0].name)
-			return possible_callees[0]
+    if sym_type == SymbolType.FunctionSymbol:
+        # look for callee from the same object file
+        if source_binary in source_to_node:
+            result = source_to_node[source_binary]
+            # print('resolved static reference', name, '=', result.name, 'from', source_binary)
+            return result
+        else:
+            # sys.stderr.write('Warning: missing static reference ' + name + ' from ' + source_binary + '\n')
+            return None
+    else:
+        # look for callee in a different object file
+        possible_callees = []
+        for source in source_to_node:
+            if source != source_binary:
+                possible_callees.append(source_to_node[source])
+        if not possible_callees:
+            # sys.stderr.write('Warning: missing extern reference ' + name + ' from ' + source_binary + '\n')
+            return None
+        elif len(possible_callees) > 1:
+            # sys.stderr.write('Warning: multiple definitions for external reference ' + name + ' from ' + source_binary + ': '+ ', '.join(map(lambda n: n.name, possible_callees)) + '\n')
+            return None
+        else:
+            # print('resolved extern reference', name, '=', possible_callees[0].name)
+            return possible_callees[0]
 
 
 def link_callgraph(func_info):
-	"""
-	Construct the callgraph based on `FunctionInfo` and link all the `FunctionNode`s together.
-	:param func_info:
-	:return:
-	"""
-	name_to_source_to_node = defaultdict(dict)
-	for node, info in func_info.items():
-		for name in [node.name] + info.aliases:
-			name_to_source_to_node[name][node.source_binary] = node
+    """
+    Construct the callgraph based on `FunctionInfo` and link all the `FunctionNode`s together.
+    :param func_info:
+    :return:
+    """
+    name_to_source_to_node = defaultdict(dict)
+    for node, info in func_info.items():
+        for name in [node.name] + info.aliases:
+            name_to_source_to_node[name][node.source_binary] = node
 
-	for node, info in func_info.items():
-		node.callees = {call_site: resolve_reference(name, sym_type, node.source_binary, name_to_source_to_node[name])
-						for call_site, (name, sym_type) in info.callees.items()}
-		# Wildcard out callees that are masked out.
-		def is_valid_call_site(i):
-			if i < 0: return False
-			for pattern in info.patterns:
-				if i >= len(pattern): return False
-				if not pattern[i]: return False
-			return True
-		node.callees = {call_site: callee if is_valid_call_site(call_site) else None
-						for call_site, callee in node.callees.items()}
+    for node, info in func_info.items():
+        node.callees = {
+            call_site: resolve_reference(
+                name, sym_type, node.source_binary, name_to_source_to_node[name]
+            )
+            for call_site, (name, sym_type) in info.callees.items()
+        }
+
+        # Wildcard out callees that are masked out.
+        def is_valid_call_site(i):
+            if i < 0:
+                return False
+            for pattern in info.patterns:
+                if i >= len(pattern):
+                    return False
+                if not pattern[i]:
+                    return False
+            return True
+
+        node.callees = {
+            call_site: callee if is_valid_call_site(call_site) else None
+            for call_site, callee in node.callees.items()
+        }
 
 
 def choose_disambiguation_bytes(sig_trie, func_info, min_offset=32, maxlen=5):
-	for node in sig_trie.all_nodes():
-		if not node.value: continue
-		for f in node.value: assert f in func_info
-		for f in node.value: # reset patterns
-			f.pattern = signaturelibrary.Pattern(b'', [])
-			f.pattern_offset = 0
-		if len(node.value) <= 1: continue
+    for node in sig_trie.all_nodes():
+        if not node.value:
+            continue
+        for f in node.value:
+            assert f in func_info
+        for f in node.value:  # reset patterns
+            f.pattern = signaturelibrary.Pattern(b"", [])
+            f.pattern_offset = 0
+        if len(node.value) <= 1:
+            continue
 
-		# since a FunctionNode can have multiple patterns in its FunctionInfo, we say that the set of functions
-		# it matches is based on the *join* ⨆ of all of these patterns. our goal here is to find some substring
-		# in all of these patterns that share no intersection.
-		#
-		# let P(f) denote the patterns belonging to FunctionNode f's FunctionInfo.
-		# then let PU(f) = ⨆ P(f) ; i.e. the join of all patterns, a pattern that would match the union of functions matched by those patterns.
-		# given some functions f1,f2,... at this trie node, we want to find some substring (i,j) in PU(f1),PU(f2),...
-		# such that PU(fx)[i:j] ⨅ PU(fy)[i:j] = 0 for all pairs fx,fy in f1,f2,...
-		# then we will choose PU(f)[i:j] as f's disambiguation pattern for each FunctionNode f in f1,f2,...
+        # since a FunctionNode can have multiple patterns in its FunctionInfo, we say that the set of functions
+        # it matches is based on the *join* ⨆ of all of these patterns. our goal here is to find some substring
+        # in all of these patterns that share no intersection.
+        #
+        # let P(f) denote the patterns belonging to FunctionNode f's FunctionInfo.
+        # then let PU(f) = ⨆ P(f) ; i.e. the join of all patterns, a pattern that would match the union of functions matched by those patterns.
+        # given some functions f1,f2,... at this trie node, we want to find some substring (i,j) in PU(f1),PU(f2),...
+        # such that PU(fx)[i:j] ⨅ PU(fy)[i:j] = 0 for all pairs fx,fy in f1,f2,...
+        # then we will choose PU(f)[i:j] as f's disambiguation pattern for each FunctionNode f in f1,f2,...
 
-		pu = {func: reduce(signaturelibrary.Pattern.union, func_info[func].patterns) for func in node.value}
-		min_len = min(map(len, pu.values()))
-		if min_len <= min_offset: # this is hopeless. all those bytes are already in the trie
-			# print('Warn: no possible disambiguation (length) for', repr(node))
-			continue
-		if reduce(operator.eq, pu.values()):
-			# print('Warn: no possible disambiguation (content) for', repr(node))
-			continue
+        pu = {
+            func: reduce(signaturelibrary.Pattern.union, func_info[func].patterns)
+            for func in node.value
+        }
+        min_len = min(map(len, pu.values()))
+        if (
+            min_len <= min_offset
+        ):  # this is hopeless. all those bytes are already in the trie
+            # print('Warn: no possible disambiguation (length) for', repr(node))
+            continue
+        if reduce(operator.eq, pu.values()):
+            # print('Warn: no possible disambiguation (content) for', repr(node))
+            continue
 
-		def ok(i, j):
-			for fx in node.value:
-				for fy in node.value:
-					if fx == fy: continue
-					if pu[fx][i:j].intersect(pu[fy][i:j]) is not None:
-						return False
-			return True
+        def ok(i, j):
+            for fx in node.value:
+                for fy in node.value:
+                    if fx == fy:
+                        continue
+                    if pu[fx][i:j].intersect(pu[fy][i:j]) is not None:
+                        return False
+            return True
 
-		for i in range(min_offset, min_len-1): # unfortunately, this is O(min_len*maxlen).
-			j = i+1
-			while not ok(i, j) and j < min_len and j-i < maxlen:
-				j += 1
-			while ok(i+1, j) and i+1 < j:
-				i += 1
-			if ok(i, j):
-				for f in node.value:
-					f.pattern = pu[f][i:j]
-					f.pattern_offset = i
-				break
-		# else:
-		#     print('Warn: failed to choose disambiguation for', repr(node))
+        for i in range(
+            min_offset, min_len - 1
+        ):  # unfortunately, this is O(min_len*maxlen).
+            j = i + 1
+            while not ok(i, j) and j < min_len and j - i < maxlen:
+                j += 1
+            while ok(i + 1, j) and i + 1 < j:
+                i += 1
+            if ok(i, j):
+                for f in node.value:
+                    f.pattern = pu[f][i:j]
+                    f.pattern_offset = i
+                break
+        # else:
+        #     print('Warn: failed to choose disambiguation for', repr(node))
 
 
 # finalizing a trie links the call graph and removes any redundant nodes, and adds disambiguation bytes
 def finalize_trie(sig_trie, func_info):
-	link_callgraph(func_info)
-	sanity_check(sig_trie)
+    link_callgraph(func_info)
+    sanity_check(sig_trie)
 
-	to_delete = find_redundant(sig_trie, func_info, sig_trie)
-	rewrite_callgraph(func_info, to_delete)
-	rewrite_trie(sig_trie, to_delete)
-	for k in to_delete: assert k.ref_count == 0
-	for k in to_delete: del func_info[k]
-	to_delete = collapse_by_name(func_info)
+    to_delete = find_redundant(sig_trie, func_info, sig_trie)
+    rewrite_callgraph(func_info, to_delete)
+    rewrite_trie(sig_trie, to_delete)
+    for k in to_delete:
+        assert k.ref_count == 0
+    for k in to_delete:
+        del func_info[k]
+    to_delete = collapse_by_name(func_info)
 
-	rewrite_callgraph(func_info, to_delete)
-	rewrite_trie(sig_trie, to_delete)
-	for k in to_delete: assert k.ref_count == 0
-	for k in to_delete: del func_info[k]
-	sanity_check(sig_trie)
+    rewrite_callgraph(func_info, to_delete)
+    rewrite_trie(sig_trie, to_delete)
+    for k in to_delete:
+        assert k.ref_count == 0
+    for k in to_delete:
+        del func_info[k]
+    sanity_check(sig_trie)
 
-	choose_disambiguation_bytes(sig_trie, func_info)
+    choose_disambiguation_bytes(sig_trie, func_info)
 
 
 # inserts functions from FunctionInfo dict `src_info` into trie `dst_trie`.
 def trie_insert_funcs(dst_trie, src_info, maxlen=32):
-	for to_add in src_info:
-		to_add.ref_count = 0 # we are repatriating this function node. reset refcount
-		for pattern in src_info[to_add].patterns:
-			pattern = pattern[:maxlen]
-			inserted = dst_trie.insert(pattern, to_add)
+    for to_add in src_info:
+        to_add.ref_count = 0  # we are repatriating this function node. reset refcount
+        for pattern in src_info[to_add].patterns:
+            pattern = pattern[:maxlen]
+            inserted = dst_trie.insert(pattern, to_add)
 
 
 # merges a signature trie `src_trie` into another signature trie dst_trie`, with FunctionInfo only available for `src_trie`.
 # `dst_trie` is modified.
 def update_signature_library(dst_trie, src_trie, src_info):
-	link_callgraph(src_info) # build callgraph
+    link_callgraph(src_info)  # build callgraph
 
-	# identify redundant signatures
-	to_delete = find_redundant(src_trie, src_info, dst_trie)
+    # identify redundant signatures
+    to_delete = find_redundant(src_trie, src_info, dst_trie)
 
-	# merge
-	trie_insert_funcs(dst_trie, src_info)
-	rewrite_callgraph(dst_trie.all_functions(), to_delete)
-	rewrite_trie(dst_trie, to_delete)
+    # merge
+    trie_insert_funcs(dst_trie, src_info)
+    rewrite_callgraph(dst_trie.all_functions(), to_delete)
+    rewrite_trie(dst_trie, to_delete)
 
-	sanity_check(dst_trie)
+    sanity_check(dst_trie)
 
 
 # combines two signature tries, `src_trie` into `dst_trie` where FunctionInfo is available for both tries.
 # both `dst_trie` and `dst_info` are mutated: functions from `src_trie`  and `src_info` are added `dst_trie` and `dst_info`.
 def combine_signature_libraries(dst_trie, dst_info, src_trie, src_info):
-	# merge
-	trie_insert_funcs(dst_trie, src_info)
-	dst_info.update(src_info)
+    # merge
+    trie_insert_funcs(dst_trie, src_info)
+    dst_info.update(src_info)
 
-	# identify redundant signatures
-	to_delete = find_redundant(dst_trie, dst_info, src_trie)
-	rewrite_callgraph(dst_info, to_delete)
-	rewrite_trie(dst_trie, to_delete)
-	for k in to_delete: assert k.ref_count == 0
-	for k in to_delete: del dst_info[k]
+    # identify redundant signatures
+    to_delete = find_redundant(dst_trie, dst_info, src_trie)
+    rewrite_callgraph(dst_info, to_delete)
+    rewrite_trie(dst_trie, to_delete)
+    for k in to_delete:
+        assert k.ref_count == 0
+    for k in to_delete:
+        del dst_info[k]
 
-	sanity_check(dst_trie)
+    sanity_check(dst_trie)
