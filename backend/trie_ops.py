@@ -494,7 +494,7 @@ def trie_insert_funcs(dst_trie, src_info, maxlen=32):
     for to_add in src_info:
         to_add.ref_count = 0  # we are repatriating this function node. reset refcount
         for pattern in src_info[to_add].patterns:
-            pattern = pattern[:maxlen]
+            pattern = pattern.slice(slice(maxlen))
             inserted = dst_trie.insert(pattern, to_add)
 
 

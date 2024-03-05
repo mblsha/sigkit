@@ -10,9 +10,6 @@ def test_maskedbyte_new():
     assert str(sl.MaskedByte.new(0x12, 0)) == "??"
     assert str(sl.MaskedByte.new(0x12, 1)) == "12"
 
-    with pytest.raises(AssertionError):
-        sl.MaskedByte.new(0x12, 2)
-
 
 def test_maskedbyte_from_str():
     assert str(sl.MaskedByte.from_str("??")) == "??"
@@ -129,6 +126,6 @@ def test_trie_node_new():
     trie = sl.new_trie()
     trie_ops.trie_insert_funcs(trie, funcs)
     print(trie)
-    # trie_ops.finalize_trie(trie, funcs)
+    trie_ops.finalize_trie(trie, funcs)
 
     # buf = sig_serialize_fb.SignatureLibraryWriter().serialize(trie)

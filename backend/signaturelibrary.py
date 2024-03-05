@@ -23,21 +23,27 @@ This package contains definitions for the data structures and objects used in
 Signature Libraries. To construct a new empty signature trie, use `new_trie`.
 """
 
-# 2-3 compatibility
-import sys
-
-PY2 = sys.version_info[0] == 2
-PY3 = sys.version_info[0] == 3
-
-if PY2:
-    bytes_ord = ord
-else:
-    bytes_ord = lambda x: x
+bytes_ord = lambda x: x
 
 import functools
 from itertools import starmap
 
-from typing import List, Optional
+from typing import (
+    Dict,
+    List,
+    Optional,
+    Literal,
+    Union,
+    cast,
+    Generator,
+    Any,
+    Set,
+    Iterator,
+)
+from dataclasses import dataclass, field
+
+MaskType = Literal[0, 1]
+
 
 @functools.total_ordering  # for sorted()
 class MaskedByte(object):
@@ -49,64 +55,71 @@ class MaskedByte(object):
     This class is backed by a flyweight cache. Use `MaskedByte.new` to construct.
     """
 
-    wildcard: Optional["MaskedByte"] = None
-    cache: List["MaskedByte"] = []
+    _wildcard: Optional["MaskedByte"] = None
+    _cache: Dict[int, "MaskedByte"] = {}
 
-    def __init__(self, value, mask):
+    def __init__(self, value: int, mask: MaskType):
+        assert type(value) == int
         self._value = value
         self._mask = mask
 
+    @staticmethod
+    def wildcard() -> "MaskedByte":
+        if MaskedByte._wildcard is None:
+            MaskedByte._wildcard = MaskedByte(0, 0)
+        return MaskedByte._wildcard
+
     @property
-    def value(self):
+    def value(self) -> int:
         return self._value
 
     @property
-    def mask(self):
+    def mask(self) -> MaskType:
         return self._mask
 
     @staticmethod
-    def new(value, mask):
-        print(type(value))
+    def new(value: int, mask: MaskType) -> "MaskedByte":
         assert type(value) == int
         assert 0 <= value <= 255
-        assert mask == 0 or mask == 1
         if mask == 0:
-            return MaskedByte.wildcard
+            return MaskedByte.wildcard()
         else:
-            return MaskedByte.cache[value]
+            if not value in MaskedByte._cache:
+                MaskedByte._cache[value] = MaskedByte(value, mask)
+            return MaskedByte._cache[value]
 
     @staticmethod
-    def from_str(s):
+    def from_str(s: str) -> "MaskedByte":
         assert len(s) == 2
         if s == "??":
-            return MaskedByte.wildcard
+            return MaskedByte.wildcard()
         else:
             return MaskedByte.new(int(s, 16), 1)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "%02x" % (self._value,) if self._mask == 1 else "??"
 
-    def __repr__(self):
-        return self.__str__()
+    def __repr__(self) -> str:
+        return f"<{self.__str__()}>"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if not type(other) == type(self):
             return False
+        other = cast(MaskedByte, other)
         return self.matches(other) and other.matches(self)
 
     # this defines a total ordering
-    def __hash__(self):
+    def __hash__(self) -> int:
         if self._mask == 0:
             return 256
         else:
             return self._value  # 0-255
 
     # this is only here for sorting purposes in python, no fancy algebraic interpretation behind it.
-    def __le__(self, other):
-        assert type(other) == type(self)
+    def __le__(self, other: "MaskedByte") -> bool:
         return self.__hash__() <= other.__hash__()
 
-    def matches(self, other):
+    def matches(self, other: Union["MaskedByte", int]) -> bool:
         """
         Defines a *partial* ordering, essentially a >= operator algebraically:
         (00...FF) <= ??; other elements are incomparable.
@@ -120,17 +133,13 @@ class MaskedByte(object):
                 return False
             else:
                 return self._value == other._value
-        if PY2 and type(other) == str:
-            assert len(other) == 1
-            return self._value == ord(other)
         assert type(other) == int
         return self._value == other
 
     # Meet operator
-    def intersect(self, other):
-        assert isinstance(other, MaskedByte)
+    def intersect(self, other: "MaskedByte") -> Optional["MaskedByte"]:
         if self._mask == 0 and other._mask == 0:
-            return MaskedByte.wildcard
+            return MaskedByte.wildcard()
         elif self._mask == 0 and other._mask == 1:
             return other
         elif self._mask == 1 and other._mask == 0:
@@ -141,18 +150,13 @@ class MaskedByte(object):
             return None  # NO intersection!
 
     # Join operator
-    def union(self, other):
-        assert isinstance(other, MaskedByte)
+    def union(self, other: "MaskedByte") -> "MaskedByte":
         if self._mask == 0 or other._mask == 0:
-            return MaskedByte.wildcard
+            return MaskedByte.wildcard()
         elif self._value == other._value:
             return self
         else:
-            return MaskedByte.wildcard  # !!
-
-
-MaskedByte.wildcard = MaskedByte(0, 0)
-MaskedByte.cache = [MaskedByte(value, 1) for value in range(256)]
+            return MaskedByte.wildcard()  # !!
 
 
 class Pattern:
@@ -162,7 +166,7 @@ class Pattern:
     Behaves like an array.
     """
 
-    def __init__(self, data, mask):
+    def __init__(self, data: bytes, mask: List[MaskType]):
         """
         Constructs a new pattern object
         :param data: bytes-like object, byte sequence of this pattern.
@@ -170,47 +174,49 @@ class Pattern:
         :return:
         """
         assert len(data) == len(mask)
-        assert type(data) == bytes
-        assert type(mask) == list
         for elem in mask:
             assert elem == 0 or elem == 1
+        # FIXME: is this array of MaskedByte?
         self._array = tuple(
-            MaskedByte.new(bytes_ord(data[i]), mask[i]) for i in range(len(data))
+            MaskedByte.new((data[i]), mask[i]) for i in range(len(data))
         )
 
     @staticmethod
-    def from_str(s):
+    def from_str(s: str) -> "Pattern":
         if len(s) % 2:
             raise ValueError("odd pattern length " + str(len(s)) + ": " + s)
         p = Pattern(b"", [])
         p._array = tuple(MaskedByte.from_str(s[i : i + 2]) for i in range(0, len(s), 2))
         return p
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "".join(map(str, self._array))
 
-    def __getitem__(self, item):
-        if isinstance(item, slice):
-            p = Pattern(b"", [])
-            p._array = self._array.__getitem__(item)
-            return p
+    def slice(self, item) -> "Pattern":
+        assert isinstance(item, slice)
+        p = Pattern(b"", [])
+        p._array = self._array.__getitem__(item)
+        return p
+
+    def __getitem__(self, item) -> MaskedByte:
+        assert not isinstance(item, slice)
         return self._array.__getitem__(item)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self._array.__len__()
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[MaskedByte]:
         return self._array.__iter__()
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if not type(other) == type(self):
             return False
         return self._array.__eq__(other._array)
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return self._array.__hash__()
 
-    def matches(self, buf):
+    def matches(self, buf) -> bool:
         """
         Checks if this Pattern matches `buf`.
         :param buf: Pattern or bytestring
@@ -221,60 +227,62 @@ class Pattern:
         return all(starmap(MaskedByte.matches, zip(self._array, buf)))
 
     # Meet operator
-    def intersect(self, other):
-        assert isinstance(other, Pattern)
+    def intersect(self, other: "Pattern") -> Optional["Pattern"]:
         # right-pad with wildcard
         size = max(len(self._array), len(other._array))
-        array1 = self._array + tuple([MaskedByte.wildcard] * (size - len(self._array)))
+        array1 = self._array + tuple(
+            [MaskedByte.wildcard()] * (size - len(self._array))
+        )
         array2 = other._array + tuple(
-            [MaskedByte.wildcard] * (size - len(other._array))
+            [MaskedByte.wildcard()] * (size - len(other._array))
         )
         result_array = tuple(starmap(MaskedByte.intersect, zip(array1, array2)))
         if not all(result_array):
-            return None  # No intersection!
+            return None
         p = Pattern(b"", [])
-        p._array = result_array
+        p._array = result_array  # type: ignore
         return p
 
     # Join operator
-    def union(self, other):
-        assert isinstance(other, Pattern)
+    def union(self, other: "Pattern") -> "Pattern":
         # length truncated to smallest
         result_array = tuple(starmap(MaskedByte.union, zip(self._array, other._array)))
         p = Pattern(b"", [])
         p._array = result_array
         return p
 
-    def data(self):
+    def data(self) -> Generator[int, None, None]:
         for b in self._array:
             yield b.value
 
-    def mask(self):
+    def mask(self) -> Generator[MaskType, None, None]:
         for b in self._array:
             yield b.mask
 
 
-class FunctionInfo(object):
+def empty_pattern() -> Pattern:
+    return Pattern(b"", [])
+
+
+@dataclass
+class FunctionInfo:
     """
     Stores additional information about functions that are useful while generating and manipulating
     signature libraries, but excluded from the finalized signature library to save space.
     This information is also used to simulate linking when generating the call-graph.
     """
 
-    def __init__(self):
-        self.patterns = None
-        """list of `Pattern`s which match this function"""
+    # list of `Pattern`s which match this function
+    patterns: List[Pattern] = field(default_factory=list)
 
-        self.callees = None
-        """dictionary of {offset: (destination name, `ReferenceType`)}; other symbols this function calls"""
+    # dictionary of {offset: (destination name, `ReferenceType`)}; other symbols this function calls
+    callees: Dict[int, str] = field(default_factory=dict)
 
-        self.aliases = None
-        """list of string containing other possible names that could link to this function"""
-
-    def __str__(self):
-        return "<FunctionInfo>"
+    # list of string containing other possible names that could link to this function
+    aliases: List[str] = field(default_factory=list)
 
 
+@dataclass
 class FunctionNode(object):
     """
     Represents a function that we would like to match and contains relevant metadata for matching purposes.
@@ -285,22 +293,25 @@ class FunctionNode(object):
     To create a FunctionNode for a given function, see `compute_sig.process_function`.
     """
 
-    def __init__(self, name):
-        self.name = name
-        """The name of the matched function"""
+    # The name of the matched function
+    name: str
 
-        self.source_binary = ""
-        """The filename of the binary that the function came from (malloc.o for example). Optional."""
+    # The filename of the binary that the function came from (malloc.o for example). Optional.
+    source_binary: str = ""
 
-        # used to disambiguate when multiple FunctionNodes are matched
-        self.pattern = Pattern(b"", [])
-        self.pattern_offset = 0
+    # used to disambiguate when multiple FunctionNodes are matched
+    pattern: Pattern = field(default_factory=empty_pattern)
+    pattern_offset: int = 0
 
-        self.callees = {}
-        """Forms a callgraph with other `FunctionNodes`. Dict of {call_offset: destination}."""
+    # Forms a callgraph with other `FunctionNodes`.
+    # Dict of {call_offset: destination}.
+    callees: Dict[int, "FunctionNode"] = field(default_factory=dict)
 
-        self.ref_count = 0
-        """Number of places this node is in its signature trie"""
+    # Number of places this node is in its signature trie
+    ref_count: int = 0
+
+    def __hash__(self) -> int:
+        return hash((self.name, self.source_binary))
 
     @property
     def is_bridge(self):
@@ -332,6 +343,9 @@ class FunctionNode(object):
         return result
 
 
+TrieValueType = Any
+
+
 class TrieNode(object):
     """
     A prefix tree, aka a Trie.
@@ -356,7 +370,12 @@ class TrieNode(object):
     In this case, there are six trie nodes (including the root), four function nodes, and `func2` is a bridge node.
     """
 
-    def __init__(self, pattern, children, value):
+    def __init__(
+        self,
+        pattern: Pattern,
+        children: Dict[MaskedByte, "TrieNode"],
+        value: TrieValueType,
+    ):
         """
         Don't call me directly. Call new_trie() instead to construct an empty trie and use insert() to add to it.
 
@@ -372,13 +391,13 @@ class TrieNode(object):
         self.children = children
         self.value = value
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         result = str(self.pattern)
         if self.value is not None:
             result += ":" + str(self.value)
         return result
 
-    def find(self, buf):
+    def find(self, buf: Pattern):
         """
         Traverses this prefix trie to find matched function nodes in a specified buffer of data.
         At each trie node visited, all function nodes contained by that node are appended to the results list.
@@ -396,15 +415,15 @@ class TrieNode(object):
         if len(self.pattern) == len(buf):
             # print('return matches1', len(self.pattern), len(buf))
             return matches
-        buf = buf[len(self.pattern) :]
+        buf = buf.slice(slice(len(self.pattern), None))
 
-        next_byte = MaskedByte.new(buf[0], 1)
+        next_byte = MaskedByte.new(buf[0].value, 1)
         # print('next_byte', next_byte)
         if next_byte in self.children:
             # print('trying children1', self.children[next_byte])
             matches.extend(self.children[next_byte].find(buf))
 
-        wildcard = MaskedByte.wildcard
+        wildcard = MaskedByte.wildcard()
         if wildcard in self.children:
             # print('trying children2', self.children[wildcard])
             matches.extend(self.children[wildcard].find(buf))
@@ -412,7 +431,7 @@ class TrieNode(object):
         # print('return matches2', matches)
         return matches
 
-    def _is_degenerate(self):
+    def _is_degenerate(self) -> bool:
         """
         A trie node is degenerate it would match any byte sequence
         :return: if the pattern is empty or all wildcards
@@ -424,9 +443,11 @@ class TrieNode(object):
                 return False
         return True
 
-    def _split(self, j):
-        split_node = TrieNode(self.pattern[j:], self.children, self.value)
-        self.pattern = self.pattern[:j]
+    def _split(self, j: int) -> None:
+        split_node = TrieNode(
+            self.pattern.slice(slice(j, None)), self.children, self.value
+        )
+        self.pattern = self.pattern.slice(slice(j))
         self.value = None
         if split_node._is_degenerate() and not split_node.children:
             # print('deleting degenerate node ', repr(split_node))
@@ -436,12 +457,12 @@ class TrieNode(object):
             return
         self.children = {split_node.pattern[0]: split_node}
 
-    def _add_child(self, child):
+    def _add_child(self, child) -> None:
         assert child.pattern[0] not in self.children
         assert isinstance(child.pattern[0], MaskedByte)
         self.children[child.pattern[0]] = child
 
-    def insert(self, pattern, value):
+    def insert(self, pattern: Pattern, value: TrieValueType) -> bool:
         """
         Inserts a new FunctionNode into this trie at the position specified by the pattern (`data`,`mask`).
         To avoid false postitives, the function node may be rejected from the trie and not inserted if the specified
@@ -467,13 +488,13 @@ class TrieNode(object):
                 if pattern[i] in node.children:  # next node
                     node = node.children[pattern[i]]
                 else:  # we need to insert a new node
-                    new_node = TrieNode(pattern[i:], {}, None)
+                    new_node = TrieNode(pattern.slice(slice(i, None)), {}, None)
                     node._add_child(new_node)
                     node = new_node
                     break
             elif pattern[i] != node.pattern[j]:  # need to split node
                 node._split(j)
-                new_node = TrieNode(pattern[i:], {}, None)
+                new_node = TrieNode(pattern.slice(slice(i, None)), {}, None)
                 node._add_child(new_node)
                 node = new_node
                 break
@@ -489,14 +510,14 @@ class TrieNode(object):
         value.ref_count += 1
         return True
 
-    def pretty_print(self, prefix_len=0):
+    def pretty_print(self, prefix_len=0) -> str:
         indent = "  " * prefix_len
         result = indent + repr(self)
         for child in self.children.values():
             result += "\n" + child.pretty_print(prefix_len + len(self.pattern))
         return result
 
-    def all_nodes(self):
+    def all_nodes(self) -> Generator["TrieNode", None, None]:
         """
         Yields all the trie nodes in this subtree using a simple DFS.
         :return: generator of `TrieNode`
@@ -506,7 +527,7 @@ class TrieNode(object):
             for node in child.all_nodes():
                 yield node
 
-    def all_values(self):
+    def all_values(self) -> Generator[TrieValueType, None, None]:
         """
         Yields function nodes that are directly contained by some trie node within this subtrie.
         Doesn't include "bridge" nodes!
@@ -517,7 +538,7 @@ class TrieNode(object):
                 for val in node.value:
                     yield val
 
-    def all_functions(self):
+    def all_functions(self) -> Generator[FunctionNode, None, None]:
         """
         Yields ALL function nodes, including bridge nodes by performing a DFS on the callgraph as well.
         Note that if this is called on a subtree, these functions may not be in under this subtree!
@@ -534,13 +555,13 @@ class TrieNode(object):
                 for func in visit(callee, visited):
                     yield func
 
-        visited = set()
+        visited: Set[FunctionNode] = set()
         for func_node in self.all_values():
             for func in visit(func_node, visited):
                 yield func
 
 
-def new_trie():
+def new_trie() -> TrieNode:
     """
     Constructs a new, empty signature trie.
     :return: an empty trie
