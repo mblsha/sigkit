@@ -39,13 +39,9 @@ from collections import defaultdict
 from functools import reduce
 import operator
 
-try:
-    from binaryninja import SymbolType
-except ImportError:
-    pass
-
+from .symbol_type import SymbolType
 from .signaturelibrary import TrieNode, FunctionInfo, FunctionNode, Pattern
-from typing import Dict, Optional, Tuple
+from typing import List, Set, Dict, Optional, Tuple
 
 
 def are_names_compatible(a, b):
@@ -354,7 +350,12 @@ def sanity_check(sig_trie):
 # if we can't resolve the reference, exclude that from the signature! if an optional library isn't linked,
 # the call will turn into a stub (like jump 0x0), and will not be a call in the real binary.
 # so, we give that a wildcard. in our matching algorithm, we allow calls to wildcard callee to be optional.
-def resolve_reference(name, sym_type, source_binary, source_to_node):
+def resolve_reference(
+    name: str,
+    sym_type: SymbolType,
+    source_binary: str,
+    source_to_node: Dict[str, FunctionNode],
+) -> Optional[FunctionNode]:
     if sym_type == SymbolType.FunctionSymbol:
         # look for callee from the same object file
         if source_binary in source_to_node:
@@ -366,7 +367,7 @@ def resolve_reference(name, sym_type, source_binary, source_to_node):
             return None
     else:
         # look for callee in a different object file
-        possible_callees = []
+        possible_callees: List[FunctionNode] = []
         for source in source_to_node:
             if source != source_binary:
                 possible_callees.append(source_to_node[source])
@@ -401,7 +402,7 @@ def link_callgraph(func_info: Dict[FunctionNode, FunctionInfo]) -> None:
         }
 
         # Wildcard out callees that are masked out.
-        def is_valid_call_site(i):
+        def is_valid_call_site(i: int) -> bool:
             if i < 0:
                 return False
             for pattern in info.patterns:

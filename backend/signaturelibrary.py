@@ -40,6 +40,7 @@ from typing import (
     Iterator,
 )
 from dataclasses import dataclass, field
+from .symbol_type import SymbolType
 
 MaskType = Literal[0, 1]
 MIN_PATTERN_LENGTH = 8
@@ -199,6 +200,10 @@ class Pattern:
         p._array = tuple(MaskedByte.from_str(s[i : i + 2]) for i in range(0, len(s), 2))
         return p
 
+    @staticmethod
+    def empty_pattern() -> "Pattern":
+        return Pattern(b"", [])
+
     def to_bytes(self) -> bytes:
         return bytes(map(lambda b: b.value, self._array))
 
@@ -273,10 +278,6 @@ class Pattern:
             yield b.mask
 
 
-def empty_pattern() -> Pattern:
-    return Pattern(b"", [])
-
-
 @dataclass
 class FunctionInfo:
     """
@@ -289,7 +290,7 @@ class FunctionInfo:
     patterns: List[Pattern] = field(default_factory=list)
 
     # dictionary of {offset: (destination name, `ReferenceType`)}; other symbols this function calls
-    callees: Dict[int, str] = field(default_factory=dict)
+    callees: Dict[int, Dict[str, SymbolType]] = field(default_factory=dict)
 
     # list of string containing other possible names that could link to this function
     aliases: List[str] = field(default_factory=list)
@@ -308,17 +309,16 @@ class FunctionNode(object):
 
     # The name of the matched function
     name: str
-
     # The filename of the binary that the function came from (malloc.o for example). Optional.
     source_binary: str = ""
 
     # used to disambiguate when multiple FunctionNodes are matched
-    pattern: Pattern = field(default_factory=empty_pattern)
+    pattern: Pattern = field(default_factory=Pattern.empty_pattern)
     pattern_offset: int = 0
 
     # Forms a callgraph with other `FunctionNodes`.
     # Dict of {call_offset: destination}.
-    callees: Dict[int, "FunctionNode"] = field(default_factory=dict)
+    callees: Dict[int, Optional["FunctionNode"]] = field(default_factory=dict)
 
     # Number of places this node is in its signature trie
     ref_count: int = 0
