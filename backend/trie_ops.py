@@ -141,7 +141,7 @@ def is_signature_subset(
     # return false if B's additional pattern doesn't match A (B ⨅ A != B)
     for a_pattern in func_info[a].patterns:
         if b.pattern_offset >= 0 and b.pattern_offset + len(b.pattern) < len(a_pattern):
-            if not b.pattern.matches(a_pattern.to_bytes()[b.pattern_offset:]):
+            if not b.pattern.matches(a_pattern.to_bytes()[b.pattern_offset :]):
                 return False
 
     # check that all callees required by B are also required by A
@@ -381,13 +381,13 @@ def resolve_reference(name, sym_type, source_binary, source_to_node):
             return possible_callees[0]
 
 
-def link_callgraph(func_info):
+def link_callgraph(func_info: Dict[FunctionNode, FunctionInfo]) -> None:
     """
     Construct the callgraph based on `FunctionInfo` and link all the `FunctionNode`s together.
     :param func_info:
     :return:
     """
-    name_to_source_to_node = defaultdict(dict)
+    name_to_source_to_node: Dict[str, Dict[str, FunctionNode]] = defaultdict(dict)
     for node, info in func_info.items():
         for name in [node.name] + info.aliases:
             name_to_source_to_node[name][node.source_binary] = node
@@ -479,7 +479,9 @@ def choose_disambiguation_bytes(sig_trie, func_info, min_offset=32, maxlen=5):
 
 
 # finalizing a trie links the call graph and removes any redundant nodes, and adds disambiguation bytes
-def finalize_trie(sig_trie, func_info):
+def finalize_trie(
+    sig_trie: TrieNode, func_info: Dict[FunctionNode, FunctionInfo]
+) -> None:
     link_callgraph(func_info)
     sanity_check(sig_trie)
 

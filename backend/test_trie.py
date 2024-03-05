@@ -159,6 +159,14 @@ def test_trie_find_wildcard():
 
 
 def test_trie_finalize():
-    pass
-    # trie_ops.finalize_trie(trie, funcs)
+    funcs = {
+        node("f1"): info("??2233445566778899"),
+        node("f2"): info("11??33445566778899"),
+        node("f3"): info("1122??445566778899"),
+    }
+
+    trie = sl.new_trie()
+    assert trie_ops.trie_insert_funcs(trie, funcs) == 3
+
+    trie_ops.finalize_trie(trie, funcs)
     # assert len(trie.children) == 1
