@@ -23,6 +23,7 @@ This package contains definitions for the data structures and objects used in
 Signature Libraries. To construct a new empty signature trie, use `new_trie`.
 """
 
+import sys
 import functools
 from itertools import starmap
 
@@ -41,7 +42,7 @@ from typing import (
 from dataclasses import dataclass, field
 
 MaskType = Literal[0, 1]
-
+MIN_PATTERN_LENGTH = 8
 
 @functools.total_ordering  # for sorted()
 class MaskedByte(object):
@@ -316,7 +317,7 @@ class FunctionNode(object):
         return self.ref_count == 0
 
     def __str__(self):
-        return "<func:" + self.name + ">"
+        return "<func:" + self.name + ":" + self.source_binary + ">"
 
     def __repr__(self):
         result = "<func:"
@@ -406,7 +407,7 @@ class TrieNode(object):
             # print('no match', self)
             return []  # no match
 
-        matches = []
+        matches: List[TrieValueType] = []
         if self.value is not None:
             matches.extend(self.value)
 
@@ -471,10 +472,12 @@ class TrieNode(object):
         :return: True if the function node was inserted, or False if it was rejected
         """
         if len(pattern) < 8:
-            # sys.stderr.write('Too short pattern for %s\n' % (value,))
+            sys.stderr.write(
+                f"Too short pattern for {value}: got {len(pattern)} want {MIN_PATTERN_LENGTH}\n"
+            )
             return False
         if sum(map(lambda e: e.mask, pattern)) < 8:
-            # sys.stderr.write('Too ambiguous mask for %s\n' % (value,))
+            sys.stderr.write(f"Too ambiguous mask for {value}\n")
             return False
 
         i = 0

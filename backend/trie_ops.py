@@ -506,12 +506,16 @@ def finalize_trie(sig_trie, func_info):
 # inserts functions from FunctionInfo dict `src_info` into trie `dst_trie`.
 def trie_insert_funcs(
     dst_trie: TrieNode, src_info: Dict[FunctionNode, FunctionInfo], maxlen: int = 32
-) -> None:
+) -> int:
+    num_inserted = 0
     for to_add in src_info:
         to_add.ref_count = 0  # we are repatriating this function node. reset refcount
         for pattern in src_info[to_add].patterns:
             pattern = pattern.slice(slice(maxlen))
             inserted = dst_trie.insert(pattern, to_add)
+            if inserted:
+                num_inserted += 1
+    return num_inserted
 
 
 # merges a signature trie `src_trie` into another signature trie dst_trie`, with FunctionInfo only available for `src_trie`.
