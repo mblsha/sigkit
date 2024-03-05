@@ -20,25 +20,27 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 
-from .sigkit.sig_serialize_fb import SignatureLibraryReader, SignatureLibraryWriter
+from .backend.sig_serialize_fb import SignatureLibraryReader, SignatureLibraryWriter
 from .sigkit.compute_sig import process_function as generate_function_signature
 
+
 def load_signature_library(filename):
-	"""
-	Load a signature library from a .sig file.
-	:param filename: input filename
-	:return: instance of `TrieNode`, the root of the signature trie.
-	"""
-	with open(filename, 'rb') as f:
-		buf = f.read()
-	return SignatureLibraryReader().deserialize(buf)
+    """
+    Load a signature library from a .sig file.
+    :param filename: input filename
+    :return: instance of `TrieNode`, the root of the signature trie.
+    """
+    with open(filename, "rb") as f:
+        buf = f.read()
+    return SignatureLibraryReader().deserialize(buf)
+
 
 def save_signature_library(sig_lib, filename):
-	"""
-	Save the given signature library to a file.
-	:param sig_lib: instance of `TrieNode`, the root of the signature trie.
-	:param filename: destination filename
-	"""
-	buf = SignatureLibraryWriter().serialize(sig_lib)
-	with open(filename, 'wb') as f:
-		f.write(buf)
+    """
+    Save the given signature library to a file.
+    :param sig_lib: instance of `TrieNode`, the root of the signature trie.
+    :param filename: destination filename
+    """
+    buf = SignatureLibraryWriter().serialize(sig_lib)
+    with open(filename, "wb") as f:
+        f.write(buf)

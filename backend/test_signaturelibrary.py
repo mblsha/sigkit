@@ -1,5 +1,9 @@
-import signaturelibrary as sl
+from . import signaturelibrary as sl
+from . import trie_ops
 import pytest
+
+# from dataclasses import dataclass
+# from typing import List, NamedTuple, Optional
 
 
 def test_maskedbyte_new():
@@ -112,6 +116,19 @@ def test_function_node_new():
     assert str(f) == "<func:test>"
 
 
-# def test_trie_node_new():
-    # t = sl.TrieNode()
-    # assert str(t) == "<trie>"
+def test_trie_node_new():
+    key = sl.FunctionNode("test")
+    value = sl.FunctionInfo()
+    value.patterns = [sl.Pattern(b"\x12\x34", [1, 1])]
+    value.aliases = []
+    value.callees = {}
+    funcs = {
+        key: value,
+    }
+
+    trie = sl.new_trie()
+    trie_ops.trie_insert_funcs(trie, funcs)
+    print(trie)
+    # trie_ops.finalize_trie(trie, funcs)
+
+    # buf = sig_serialize_fb.SignatureLibraryWriter().serialize(trie)

@@ -1,11 +1,15 @@
-from binaryninja import *
+try:
+    from binaryninja import core_ui_enabled, PluginCommand
+except ImportError:
+    def core_ui_enabled():
+        return False
 
 # exports
-from . import trie_ops
-from . import sig_serialize_fb
-from . import sig_serialize_json
+from ..backend import trie_ops
+from ..backend import sig_serialize_fb
+from ..backend import sig_serialize_json
 
-from .signaturelibrary import TrieNode, FunctionNode, Pattern, MaskedByte, new_trie
+from ..backend.signaturelibrary import TrieNode, FunctionNode, Pattern, MaskedByte, new_trie
 from .compute_sig import process_function as generate_function_signature
 
 if core_ui_enabled():
@@ -61,8 +65,11 @@ if core_ui_enabled():
         for func in bv.functions:
             if bv.get_symbol_at(func.start) is None:
                 continue
+
+            # ignore internal functions from PsyQ-PSX
             if func.name.startswith("."):
                 continue
+
             func_node, info = generate_function_signature(func, guess_relocs)
             funcs[func_node] = info
             log.log_debug("Processed " + func.name)

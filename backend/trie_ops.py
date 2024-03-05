@@ -39,7 +39,10 @@ from collections import defaultdict
 from functools import reduce
 import operator
 
-from binaryninja import SymbolType
+try:
+    from binaryninja import SymbolType
+except ImportError:
+    pass
 
 from . import signaturelibrary
 

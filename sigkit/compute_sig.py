@@ -24,10 +24,13 @@ Ninja's python API. The most useful function is `process_function`, which
 generates a function signature for the specified function.
 """
 
-from binaryninja import *
+try:
+    from binaryninja import *
+except ImportError:
+    pass
 
-from . import signaturelibrary
-from . import trie_ops
+from ..backend import signaturelibrary
+from ..backend import trie_ops
 
 
 def is_llil_relocatable(llil):
@@ -251,6 +254,7 @@ def function_pattern(func, guess_relocs, sig_length=None):
     return signaturelibrary.Pattern(data, mask)
 
 
+# aka generate_function_signature
 def process_function(func, guess_relocs):
     """
     Generates a signature for a given function.

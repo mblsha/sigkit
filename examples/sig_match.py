@@ -31,7 +31,7 @@ from __future__ import print_function
 
 from binaryninja import *
 
-import sigkit.compute_sig
+from ..sigkit import compute_sig
 
 
 class SignatureMatcher(object):
@@ -46,7 +46,7 @@ class SignatureMatcher(object):
         self._cur_match_debug = ""
 
     def resolve_thunk(self, func, level=0):
-        if sigkit.compute_sig.get_func_len(func) >= 8:
+        if compute_sig.get_func_len(func) >= 8:
             # print('resolve_thunk: not modified')
             return func
 
@@ -179,7 +179,7 @@ class SignatureMatcher(object):
         if func in self._matches:
             return 999 if self._matches[func] == func_node else 0
 
-        func_len = sigkit.compute_sig.get_func_len(func)
+        func_len = compute_sig.get_func_len(func)
         func_data = self.bv.read(func.start, func_len)
         if not func_node.is_bridge:
             trie_matches = self.sig_trie.find(func_data)
@@ -234,7 +234,7 @@ class SignatureMatcher(object):
         """
         # if func.name != 'PutDrawEnv':
         #     return []
-        func_len = sigkit.compute_sig.get_func_len(func)
+        func_len = compute_sig.get_func_len(func)
         func_data = self.bv.read(func.start, func_len)
         trie_matches = self.sig_trie.find(func_data)
         # print('>> trie_matches', trie_matches)
@@ -293,7 +293,7 @@ class SignatureMatcher(object):
             for func in queue:
                 if func in self._matches:
                     continue
-                if sigkit.compute_sig.get_func_len(func) < 8:
+                if compute_sig.get_func_len(func) < 8:
                     continue
                 matches = self.process_func(func)
                 if len(matches) > 1:

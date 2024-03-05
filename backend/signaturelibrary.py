@@ -37,6 +37,7 @@ else:
 import functools
 from itertools import starmap
 
+from typing import List, Optional
 
 @functools.total_ordering  # for sorted()
 class MaskedByte(object):
@@ -48,8 +49,8 @@ class MaskedByte(object):
     This class is backed by a flyweight cache. Use `MaskedByte.new` to construct.
     """
 
-    wildcard = None
-    cache = []
+    wildcard: Optional["MaskedByte"] = None
+    cache: List["MaskedByte"] = []
 
     def __init__(self, value, mask):
         self._value = value
@@ -65,6 +66,7 @@ class MaskedByte(object):
 
     @staticmethod
     def new(value, mask):
+        print(type(value))
         assert type(value) == int
         assert 0 <= value <= 255
         assert mask == 0 or mask == 1

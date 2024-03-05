@@ -121,8 +121,8 @@ if __name__ == "__main__" and __package__ is None:
         % (__package__, os.path.splitext(__file__)[0], __file__)
     )
 
-from . import sig_serialize_json
-from . import sig_serialize_fb
+from ..backend import sig_serialize_json
+from ..backend import sig_serialize_fb
 
 
 class App(QMainWindow):

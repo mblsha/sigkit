@@ -27,41 +27,46 @@ purposes.
 
 import pickle
 import zlib
+import json
 
-from sigkit import *
+from ..backend import sig_serialize_fb, sig_serialize_json
 
-if __name__ == '__main__':
-	import sys
+if __name__ == "__main__":
+    import sys
 
-	if len(sys.argv) < 2:
-		print('Usage: convert_siglib.py <signature library>')
-		sys.exit(1)
+    if len(sys.argv) < 2:
+        print("Usage: convert_siglib.py <signature library>")
+        sys.exit(1)
 
-	# Load a signature library.
-	filename = sys.argv[1]
-	basename, ext = filename[:filename.index('.')], filename[filename.index('.'):]
-	if ext == '.sig':
-		with open(filename, 'rb') as f:
-			sig_trie = sig_serialize_fb.load(f)
-	elif ext == '.json':
-		with open(filename, 'r') as f:
-			sig_trie = sig_serialize_json.load(f)
-	elif ext == '.json.zlib':
-		with open(filename, 'rb') as f:
-			sig_trie =  sig_serialize_json.deserialize(json.loads(zlib.decompress(f.read()).decode('utf-8')))
-	elif ext == '.pkl':
-		with open(filename, 'rb') as f:
-			sig_trie = pickle.load(f)
-	else:
-		print('Unsupported file extension ' + ext)
-		sys.exit(1)
+    # Load a signature library.
+    filename = sys.argv[1]
+    basename, ext = filename[: filename.index(".")], filename[filename.index(".") :]
+    if ext == ".sig":
+        with open(filename, "rb") as f:
+            sig_trie = sig_serialize_fb.load(f)
+    elif ext == ".json":
+        with open(filename, "r") as f:
+            sig_trie = sig_serialize_json.load(f)
+    elif ext == ".json.zlib":
+        with open(filename, "rb") as f:
+            sig_trie = sig_serialize_json.deserialize(
+                json.loads(zlib.decompress(f.read()).decode("utf-8"))
+            )
+    elif ext == ".pkl":
+        with open(filename, "rb") as f:
+            sig_trie = pickle.load(f)
+    else:
+        print("Unsupported file extension " + ext)
+        sys.exit(1)
 
-	# Save the signature library to a binary format and write it to a file.
-	buf = sig_serialize_fb.dumps(sig_trie)
-	with open(basename + '.sig', 'wb') as f:
-		f.write(buf)
+    # Save the signature library to a binary format and write it to a file.
+    buf = sig_serialize_fb.dumps(sig_trie)
+    with open(basename + ".sig", "wb") as f:
+        f.write(buf)
 
-	# This is a pretty stringent assertion, but I want to be sure this implementation is correct.
-	# having the exact same round-trip depends on having a consistent iteration order through the trie as well
-	# as the ordering of the functions per node. That's enforced by iterating the trie (DFS) in a sorted fashion.
-	assert buf == sig_serialize_fb.SignatureLibraryWriter().serialize(sig_serialize_fb.SignatureLibraryReader().deserialize(buf))
+    # This is a pretty stringent assertion, but I want to be sure this implementation is correct.
+    # having the exact same round-trip depends on having a consistent iteration order through the trie as well
+    # as the ordering of the functions per node. That's enforced by iterating the trie (DFS) in a sorted fashion.
+    assert buf == sig_serialize_fb.SignatureLibraryWriter().serialize(
+        sig_serialize_fb.SignatureLibraryReader().deserialize(buf)
+    )
