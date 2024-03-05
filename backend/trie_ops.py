@@ -44,7 +44,8 @@ try:
 except ImportError:
     pass
 
-from . import signaturelibrary
+from .signaturelibrary import TrieNode, FunctionInfo, FunctionNode, Pattern
+from typing import Dict, Optional, Tuple
 
 
 def are_names_compatible(a, b):
@@ -90,7 +91,13 @@ def are_names_compatible(a, b):
 # when we're trying to merge additional nodes into a trie that we don't have FunctionInfo for.
 # in this case, we only need function info for the nodes we're trying to merge in by exploiting
 # the signature trie. We know A <= B if searching for A's data in the trie matches B.
-def is_signature_subset(a, func_info, b, sig_trie, visited):
+def is_signature_subset(
+    a: Optional[FunctionNode],
+    func_info: Dict[FunctionNode, FunctionInfo],
+    b: Optional[FunctionNode],
+    sig_trie: TrieNode,
+    visited: Dict[FunctionNode, FunctionNode],
+) -> bool:
     """
     :param a: FunctionNode to check whether is a subset of B
     :param func_info: dict containing the function info for A's trie
@@ -105,8 +112,8 @@ def is_signature_subset(a, func_info, b, sig_trie, visited):
         return True
     if int(a is None) > int(b is None):
         return False
-    assert isinstance(a, signaturelibrary.FunctionNode)
-    assert isinstance(b, signaturelibrary.FunctionNode)
+    assert isinstance(a, FunctionNode)
+    assert isinstance(b, FunctionNode)
     assert a in func_info
 
     # this is essentially a dfs on the callgraph. if we encounter a backedge,
@@ -134,7 +141,7 @@ def is_signature_subset(a, func_info, b, sig_trie, visited):
     # return false if B's additional pattern doesn't match A (B ⨅ A != B)
     for a_pattern in func_info[a].patterns:
         if b.pattern_offset >= 0 and b.pattern_offset + len(b.pattern) < len(a_pattern):
-            if not b.pattern.matches(a_pattern[b.pattern_offset :]):
+            if not b.pattern.matches(a_pattern.slice(slice(b.pattern_offset, None))):
                 return False
 
     # check that all callees required by B are also required by A
@@ -227,10 +234,18 @@ def rewrite_trie(sig_trie, to_delete, update=False):
 
 
 # one-way deduplication (trie1 to trie2)
-def find_redundant(trie1, info1, trie2):
-    cache = {}
+def find_redundant(
+    trie1: TrieNode, info1: Dict[FunctionNode, FunctionInfo], trie2: TrieNode
+) -> Dict[FunctionNode, FunctionNode]:
+    cache: Dict[Tuple[FunctionNode, FunctionNode], bool] = {}
 
-    def cached_is_signature_subset(a, func_info, b, sig_trie, visited):
+    def cached_is_signature_subset(
+        a: FunctionNode,
+        func_info: Dict[FunctionNode, FunctionInfo],
+        b: FunctionNode,
+        sig_trie: TrieNode,
+        visited: Dict[FunctionNode, FunctionNode],
+    ) -> bool:
         if (a, b) in cache:
             return cache[(a, b)]
         result = is_signature_subset(a, func_info, b, sig_trie, visited)
@@ -240,9 +255,9 @@ def find_redundant(trie1, info1, trie2):
     # search trie2 for funcs from trie1. if `A` is matched by `B`, then `A` matches a subset of `B`
     # and should be discarded. references to `A` should be replaced by references to `B`.
     # algebraically if A ⨅ B = A, then A <= B, so A is redundant.
-    to_delete = {}
+    to_delete: Dict[FunctionNode, FunctionNode] = {}
 
-    def check_if_redundant(func_a, func_b):
+    def check_if_redundant(func_a: FunctionNode, func_b: FunctionNode) -> bool:
         while func_b in to_delete:  # avoid cycles
             func_b = to_delete[func_b]
         if func_a == func_b:  # avoid infinite loop
@@ -274,13 +289,13 @@ def find_redundant(trie1, info1, trie2):
 
 # Would it be ok substitute A with B if they have the same name? In that case, trie position is irrelevant as
 # we can just have multiple leaf nodes pointing to the same function node
-def can_substitute(a, b):
+def can_substitute(a: Optional[FunctionNode], b: Optional[FunctionNode]) -> bool:
     if a == b:
         return True
     if (b is None) != (a is None):
         return False
-    assert isinstance(a, signaturelibrary.FunctionNode)
-    assert isinstance(b, signaturelibrary.FunctionNode)
+    assert isinstance(a, FunctionNode)
+    assert isinstance(b, FunctionNode)
 
     if not are_names_compatible(a, b):
         return False
@@ -409,7 +424,7 @@ def choose_disambiguation_bytes(sig_trie, func_info, min_offset=32, maxlen=5):
         for f in node.value:
             assert f in func_info
         for f in node.value:  # reset patterns
-            f.pattern = signaturelibrary.Pattern(b"", [])
+            f.pattern = Pattern(b"", [])
             f.pattern_offset = 0
         if len(node.value) <= 1:
             continue
@@ -425,8 +440,7 @@ def choose_disambiguation_bytes(sig_trie, func_info, min_offset=32, maxlen=5):
         # then we will choose PU(f)[i:j] as f's disambiguation pattern for each FunctionNode f in f1,f2,...
 
         pu = {
-            func: reduce(signaturelibrary.Pattern.union, func_info[func].patterns)
-            for func in node.value
+            func: reduce(Pattern.union, func_info[func].patterns) for func in node.value
         }
         min_len = min(map(len, pu.values()))
         if (
@@ -490,7 +504,9 @@ def finalize_trie(sig_trie, func_info):
 
 
 # inserts functions from FunctionInfo dict `src_info` into trie `dst_trie`.
-def trie_insert_funcs(dst_trie, src_info, maxlen=32):
+def trie_insert_funcs(
+    dst_trie: TrieNode, src_info: Dict[FunctionNode, FunctionInfo], maxlen: int = 32
+) -> None:
     for to_add in src_info:
         to_add.ref_count = 0  # we are repatriating this function node. reset refcount
         for pattern in src_info[to_add].patterns:
@@ -500,7 +516,9 @@ def trie_insert_funcs(dst_trie, src_info, maxlen=32):
 
 # merges a signature trie `src_trie` into another signature trie dst_trie`, with FunctionInfo only available for `src_trie`.
 # `dst_trie` is modified.
-def update_signature_library(dst_trie, src_trie, src_info):
+def update_signature_library(
+    dst_trie: TrieNode, src_trie: TrieNode, src_info: Dict[FunctionNode, FunctionInfo]
+) -> None:
     link_callgraph(src_info)  # build callgraph
 
     # identify redundant signatures
@@ -516,7 +534,12 @@ def update_signature_library(dst_trie, src_trie, src_info):
 
 # combines two signature tries, `src_trie` into `dst_trie` where FunctionInfo is available for both tries.
 # both `dst_trie` and `dst_info` are mutated: functions from `src_trie`  and `src_info` are added `dst_trie` and `dst_info`.
-def combine_signature_libraries(dst_trie, dst_info, src_trie, src_info):
+def combine_signature_libraries(
+    dst_trie: TrieNode,
+    dst_info: Dict[FunctionNode, FunctionInfo],
+    src_trie: TrieNode,
+    src_info: Dict[FunctionNode, FunctionInfo],
+) -> None:
     # merge
     trie_insert_funcs(dst_trie, src_info)
     dst_info.update(src_info)

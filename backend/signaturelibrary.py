@@ -23,8 +23,6 @@ This package contains definitions for the data structures and objects used in
 Signature Libraries. To construct a new empty signature trie, use `new_trie`.
 """
 
-bytes_ord = lambda x: x
-
 import functools
 from itertools import starmap
 
@@ -192,14 +190,13 @@ class Pattern:
     def __str__(self) -> str:
         return "".join(map(str, self._array))
 
-    def slice(self, item) -> "Pattern":
+    def slice(self, item: slice) -> "Pattern":
         assert isinstance(item, slice)
         p = Pattern(b"", [])
         p._array = self._array.__getitem__(item)
         return p
 
-    def __getitem__(self, item) -> MaskedByte:
-        assert not isinstance(item, slice)
+    def __getitem__(self, item: int) -> MaskedByte:
         return self._array.__getitem__(item)
 
     def __len__(self) -> int:
@@ -208,15 +205,16 @@ class Pattern:
     def __iter__(self) -> Iterator[MaskedByte]:
         return self._array.__iter__()
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: object) -> bool:
         if not type(other) == type(self):
             return False
+        other = cast(Pattern, other)
         return self._array.__eq__(other._array)
 
     def __hash__(self) -> int:
         return self._array.__hash__()
 
-    def matches(self, buf) -> bool:
+    def matches(self, buf: "Pattern") -> bool:
         """
         Checks if this Pattern matches `buf`.
         :param buf: Pattern or bytestring
@@ -397,7 +395,7 @@ class TrieNode(object):
             result += ":" + str(self.value)
         return result
 
-    def find(self, buf: Pattern):
+    def find(self, buf: Pattern) -> List[TrieValueType]:
         """
         Traverses this prefix trie to find matched function nodes in a specified buffer of data.
         At each trie node visited, all function nodes contained by that node are appended to the results list.
@@ -457,7 +455,7 @@ class TrieNode(object):
             return
         self.children = {split_node.pattern[0]: split_node}
 
-    def _add_child(self, child) -> None:
+    def _add_child(self, child: "TrieNode") -> None:
         assert child.pattern[0] not in self.children
         assert isinstance(child.pattern[0], MaskedByte)
         self.children[child.pattern[0]] = child
@@ -510,7 +508,7 @@ class TrieNode(object):
         value.ref_count += 1
         return True
 
-    def pretty_print(self, prefix_len=0) -> str:
+    def pretty_print(self, prefix_len: int = 0) -> str:
         indent = "  " * prefix_len
         result = indent + repr(self)
         for child in self.children.values():

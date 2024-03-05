@@ -124,8 +124,12 @@ def test_trie_node_new():
     }
 
     trie = sl.new_trie()
-    trie_ops.trie_insert_funcs(trie, funcs)
-    print(trie)
-    trie_ops.finalize_trie(trie, funcs)
+    assert len(trie.children) == 0
+    # spy = mocker.spy(foo, 'bar')
 
-    # buf = sig_serialize_fb.SignatureLibraryWriter().serialize(trie)
+    trie_ops.trie_insert_funcs(trie, funcs)
+    assert len(trie.children) == 1
+    trie_ops.finalize_trie(trie, funcs)
+    assert len(trie.children) == 1
+
+    assert list(trie.all_nodes()) == [key]

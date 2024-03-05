@@ -112,20 +112,20 @@ import pickle
 import json
 import zlib
 
-if __name__ == "__main__" and __package__ is None:
-    __package__ = os.path.basename(os.getcwd())
-    sys.path.append(os.path.dirname(os.getcwd()))
-    __import__(__package__)  # python2 compat
-    print(
-        "Please run with python -m %s.%s instead of %s directly."
-        % (__package__, os.path.splitext(__file__)[0], __file__)
-    )
+# if __name__ == "__main__" and __package__ is None:
+#     __package__ = os.path.basename(os.getcwd())
+#     sys.path.append(os.path.dirname(os.getcwd()))
+#     __import__(__package__)  # python2 compat
+#     print(
+#         "Please run with python -m %s.%s instead of %s directly."
+#         % (__package__, os.path.splitext(__file__)[0], __file__)
+#     )
 
 from ..backend import sig_serialize_json
 from ..backend import sig_serialize_fb
 
 
-class App(QMainWindow):
+class App(QMainWindow):  # type: ignore
     def __init__(self):
         super(App, self).__init__()
 
@@ -453,7 +453,7 @@ class App(QMainWindow):
 
 
 # copy-pasted off https://stackoverflow.com/questions/55923137/ lol
-class PatternDelegate(QStyledItemDelegate):
+class PatternDelegate(QStyledItemDelegate):  # type: ignore
     def __init__(self):
         super(PatternDelegate, self).__init__()
         self.font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
@@ -521,7 +521,7 @@ class PatternDelegate(QStyledItemDelegate):
 
 
 # https://stackoverflow.com/questions/35397943/how-to-make-a-fast-qtableview-with-html-formatted-and-clickable-cells
-class CalleesDelegate(QStyledItemDelegate):
+class CalleesDelegate(QStyledItemDelegate):  # type: ignore
     def __init__(self):
         super(CalleesDelegate, self).__init__()
 
@@ -563,7 +563,7 @@ class CalleesDelegate(QStyledItemDelegate):
         return QSize(doc.idealWidth(), doc.size().height())
 
 
-class TrieView(QTreeView):
+class TrieView(QTreeView):  # type: ignore
     linkUnhovered = Signal()
     linkHovered = Signal(str)
     linkActivated = Signal(str)
