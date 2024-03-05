@@ -44,7 +44,7 @@ from .signaturelibrary import TrieNode, FunctionInfo, FunctionNode, Pattern
 from typing import List, Set, Dict, Optional, Tuple
 
 
-def are_names_compatible(a, b):
+def are_names_compatible(a: FunctionNode, b: FunctionNode) -> bool:
     if a == b:
         return True
     if a.name == b.name:
@@ -161,7 +161,9 @@ def is_signature_subset(
     return True
 
 
-def rewrite_callgraph(funcs, to_delete):
+def rewrite_callgraph(
+    funcs: Dict[FunctionNode, FunctionInfo], to_delete: Dict[FunctionNode, FunctionNode]
+) -> None:
     # complete the DFS first, avoid simultaneous modification and traversal
     inverse_callgraph = defaultdict(set)
     for func in funcs:
@@ -171,7 +173,7 @@ def rewrite_callgraph(funcs, to_delete):
             if callee in to_delete:
                 inverse_callgraph[callee].add(func)
 
-    def follow(k):
+    def follow(k: FunctionNode) -> FunctionNode:
         while k in to_delete:
             k = to_delete[k]
         return k
@@ -187,8 +189,12 @@ def rewrite_callgraph(funcs, to_delete):
                     # print('replace', k.name, id(k), '=>', v.name, id(v),'in', func.name)
 
 
-def rewrite_trie(sig_trie, to_delete, update=False):
-    def follow(k):
+def rewrite_trie(
+    sig_trie: TrieNode,
+    to_delete: Dict[FunctionNode, FunctionNode],
+    update: bool = False,
+) -> None:
+    def follow(k: FunctionNode) -> FunctionNode:
         while k in to_delete:
             k = to_delete[k]
         return k
@@ -213,7 +219,7 @@ def rewrite_trie(sig_trie, to_delete, update=False):
         node.value = new_value
 
     # dfs; delete functionless subtries
-    def prune(node):
+    def prune(node: TrieNode) -> bool:
         if not node.children:
             should_delete = not node.value
             return should_delete
@@ -309,11 +315,13 @@ def can_substitute(a: Optional[FunctionNode], b: Optional[FunctionNode]) -> bool
 
 
 # deal with signatures with the same name at different parts in the signature trie that can be merged
-def collapse_by_name(func_info):
+def collapse_by_name(
+    func_info: Dict[FunctionNode, FunctionInfo]
+) -> Dict[FunctionNode, FunctionNode]:
     by_name = defaultdict(set)
     for f in func_info:
         by_name[f.name].add(f)
-    to_delete = {}
+    to_delete: Dict[FunctionNode, FunctionNode] = {}
     for family in by_name.values():
         for func in family:
             for cand in family:
@@ -333,12 +341,12 @@ def collapse_by_name(func_info):
     return to_delete
 
 
-def sanity_check(sig_trie):
+def sanity_check(sig_trie: TrieNode) -> None:
     if not sig_trie.children:
         sys.stderr.write("Warning: no functions in trie\n")
         return
 
-    count = defaultdict(lambda: 0)
+    count: Dict[FunctionNode, int] = defaultdict(lambda: 0)
     for func in sig_trie.all_values():
         count[func] += 1
     for func in sig_trie.all_functions():
@@ -418,7 +426,12 @@ def link_callgraph(func_info: Dict[FunctionNode, FunctionInfo]) -> None:
         }
 
 
-def choose_disambiguation_bytes(sig_trie, func_info, min_offset=32, maxlen=5):
+def choose_disambiguation_bytes(
+    sig_trie: TrieNode,
+    func_info: Dict[FunctionNode, FunctionInfo],
+    min_offset: int = 32,
+    maxlen: int = 5,
+) -> None:
     for node in sig_trie.all_nodes():
         if not node.value:
             continue
@@ -453,12 +466,16 @@ def choose_disambiguation_bytes(sig_trie, func_info, min_offset=32, maxlen=5):
             # print('Warn: no possible disambiguation (content) for', repr(node))
             continue
 
-        def ok(i, j):
+        def ok(i: int, j: int) -> bool:
+            assert node.value
             for fx in node.value:
                 for fy in node.value:
                     if fx == fy:
                         continue
-                    if pu[fx][i:j].intersect(pu[fy][i:j]) is not None:
+                    if (
+                        pu[fx].slice(slice(i, j)).intersect(pu[fy].slice(slice(i, j)))
+                        is not None
+                    ):
                         return False
             return True
 
@@ -472,7 +489,7 @@ def choose_disambiguation_bytes(sig_trie, func_info, min_offset=32, maxlen=5):
                 i += 1
             if ok(i, j):
                 for f in node.value:
-                    f.pattern = pu[f][i:j]
+                    f.pattern = pu[f].slice(slice(i, j))
                     f.pattern_offset = i
                 break
         # else:
@@ -533,7 +550,7 @@ def update_signature_library(
 
     # merge
     trie_insert_funcs(dst_trie, src_info)
-    rewrite_callgraph(dst_trie.all_functions(), to_delete)
+    rewrite_callgraph(src_info, to_delete)
     rewrite_trie(dst_trie, to_delete)
 
     sanity_check(dst_trie)

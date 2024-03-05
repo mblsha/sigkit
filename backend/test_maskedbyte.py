@@ -2,12 +2,12 @@ from .signaturelibrary import MaskedByte
 import pytest
 
 
-def test_maskedbyte_new():
+def test_maskedbyte_new() -> None:
     assert str(MaskedByte.new(0x12, 0)) == "??"
     assert str(MaskedByte.new(0x12, 1)) == "12"
 
 
-def test_maskedbyte_from_str():
+def test_maskedbyte_from_str() -> None:
     assert str(MaskedByte.from_str("??")) == "??"
     assert str(MaskedByte.from_str("12")) == "12"
 
@@ -15,7 +15,7 @@ def test_maskedbyte_from_str():
         MaskedByte.from_str("123")
 
 
-def test_maskedbyte_le():
+def test_maskedbyte_le() -> None:
     a = MaskedByte.new(0x12, 1)
     b = MaskedByte.new(0x13, 1)
     assert a < b
@@ -25,7 +25,7 @@ def test_maskedbyte_le():
     assert c == d
 
 
-def test_maskedbyte_matches():
+def test_maskedbyte_matches() -> None:
     a = MaskedByte.new(0x12, 1)
     b = MaskedByte.new(0x12, 1)
     assert a.matches(b)
@@ -53,7 +53,7 @@ def test_maskedbyte_matches():
     assert MaskedByte.new(0x12, 0).matches(0x12)
     assert MaskedByte.new(0x12, 0).matches(0x13)
 
-def test_maskedbyte_intersect():
+def test_maskedbyte_intersect() -> None:
     a = MaskedByte.new(0x12, 1)
     b = MaskedByte.new(0x12, 1)
     assert str(a.intersect(b)) == "12"
@@ -79,7 +79,7 @@ def test_maskedbyte_intersect():
     assert str(a.intersect(b)) == "ff"
 
 
-def test_maskedbyte_union():
+def test_maskedbyte_union() -> None:
     a = MaskedByte.new(0x12, 0)
     b = MaskedByte.new(0xFF, 0)
     assert str(a.union(b)) == "??"

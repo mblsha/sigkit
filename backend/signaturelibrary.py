@@ -327,13 +327,18 @@ class FunctionNode(object):
         return hash((self.name, self.source_binary))
 
     @property
-    def is_bridge(self):
+    def is_bridge(self) -> bool:
         return self.ref_count == 0
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "<func:" + self.name + ":" + self.source_binary + ">"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        def callee_name(k: Optional["FunctionNode"]) -> str:
+            if k is None:
+                return "None"
+            return k.name
+
         result = "<func:"
         result += str(self.ref_count) + " "
         result += self.name + ":" + self.source_binary
@@ -342,9 +347,7 @@ class FunctionNode(object):
                 ":{"
                 + ", ".join(
                     map(
-                        lambda k: str(k)
-                        + ": "
-                        + ("None" if self.callees[k] is None else self.callees[k].name),
+                        lambda k: str(k) + ": " + callee_name(self.callees[k]),
                         self.callees,
                     )
                 )
@@ -553,7 +556,9 @@ class TrieNode(object):
         :return: generator of `FunctionNode`
         """
 
-        def visit(func_node, visited):  # callgraph dfs
+        def visit(
+            func_node: Optional[FunctionNode], visited: Set[FunctionNode]
+        ) -> Generator[FunctionNode, None, None]:
             if func_node is None or func_node in visited:
                 return
             visited.add(func_node)

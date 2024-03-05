@@ -22,9 +22,10 @@
 
 from .backend.sig_serialize_fb import SignatureLibraryReader, SignatureLibraryWriter
 from .sigkit.compute_sig import process_function as generate_function_signature
+from .backend.signaturelibrary import TrieNode
 
 
-def load_signature_library(filename):
+def load_signature_library(filename: str) -> TrieNode:
     """
     Load a signature library from a .sig file.
     :param filename: input filename
@@ -35,7 +36,7 @@ def load_signature_library(filename):
     return SignatureLibraryReader().deserialize(buf)
 
 
-def save_signature_library(sig_lib, filename):
+def save_signature_library(sig_lib: TrieNode, filename: str) -> None:
     """
     Save the given signature library to a file.
     :param sig_lib: instance of `TrieNode`, the root of the signature trie.

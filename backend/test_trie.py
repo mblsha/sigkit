@@ -11,13 +11,13 @@ from . import trie_ops
 import pytest
 
 
-def test_function_info_new():
+def test_function_info_new() -> None:
     p = Pattern.from_str("??34")
     f = FunctionInfo([p])
     assert f.patterns == [p]
 
 
-def test_function_node_new():
+def test_function_node_new() -> None:
     f = FunctionNode("test")
     assert str(f) == "<func:test:>"
     assert f.is_bridge == True
@@ -47,7 +47,7 @@ def info(s: str) -> FunctionInfo:
     return FunctionInfo([Pattern.from_str(s)])
 
 
-def test_trie_insert_single():
+def test_trie_insert_single() -> None:
     trie = sl.new_trie()
     assert len(trie.children) == 0
 
@@ -75,7 +75,7 @@ def test_trie_insert_single():
     )
 
 
-def test_trie_insert_multiple():
+def test_trie_insert_multiple() -> None:
     # all functions have the same pattern
     funcs = {
         node("f1"): info("1122334455667788"),
@@ -97,6 +97,7 @@ def test_trie_insert_multiple():
     child = trie.children[b("11")]
     assert str(child.pattern) == "1122334455667788"
     assert len(child.children) == 0
+    assert child.value
     assert len(child.value) == 3
     assert list(child.value) == [node("f1", 1), node("f2", 1), node("f3", 1)]
 
@@ -139,7 +140,7 @@ def test_trie_insert_multiple():
     assert trie.find(bb("1122334455660088")) == [node("f2", 1)]
 
 
-def test_trie_find_wildcard():
+def test_trie_find_wildcard() -> None:
     funcs = {
         node("f1"): info("??2233445566778899"),
         node("f2"): info("11??33445566778899"),
@@ -158,7 +159,7 @@ def test_trie_find_wildcard():
     assert trie.find(bb("112299445566778899")) == [node("f3", 1)]
 
 
-def test_trie_finalize():
+def test_trie_finalize() -> None:
     funcs = {
         node("f1"): info("??2233445566778899"),
         node("f2"): info("11??33445566778899"),

@@ -1,12 +1,12 @@
 from .signaturelibrary import Pattern, MaskedByte, str_to_bytes
 
 
-def test_pattern_new():
+def test_pattern_new() -> None:
     p = Pattern(b"\x12\x34", [0, 1])
     assert str(p) == "??34"
 
 
-def test_pattern_from_str():
+def test_pattern_from_str() -> None:
     p = Pattern.from_str("??34")
     assert str(p) == "??34"
     assert len(p) == 2
@@ -20,13 +20,13 @@ def test_pattern_from_str():
     assert p[1] == MaskedByte.new(0x34, 1)
 
 
-def test_str_to_bytes():
+def test_str_to_bytes() -> None:
     assert str_to_bytes("") == b""
     assert str_to_bytes("1234") == b"\x12\x34"
     assert str_to_bytes("123") == b"\x12\x03"
 
 
-def test_pattern_to_bytes():
+def test_pattern_to_bytes() -> None:
     b = str_to_bytes
     p = Pattern.from_str
 
@@ -35,7 +35,7 @@ def test_pattern_to_bytes():
     assert p("1234").to_bytes() == b("1234")
 
 
-def test_pattern_matches():
+def test_pattern_matches() -> None:
     b = str_to_bytes
     p = Pattern.from_str
 
@@ -52,7 +52,7 @@ def test_pattern_matches():
     assert p("1234").matches(b("123456"))
 
 
-def test_pattern_intersect():
+def test_pattern_intersect() -> None:
     a = Pattern.from_str("??34")
     b = Pattern.from_str("??34")
     assert str(a.intersect(b)) == "??34"
@@ -66,7 +66,7 @@ def test_pattern_intersect():
     assert str(a.intersect(b)) == "1234"
 
 
-def test_pattern_union():
+def test_pattern_union() -> None:
     a = Pattern.from_str("??34")
     b = Pattern.from_str("??34")
     assert str(a.union(b)) == "??34"
@@ -84,7 +84,7 @@ def test_pattern_union():
     assert str(a.union(b)) == "??34"
 
 
-def test_pattern_data():
+def test_pattern_data() -> None:
     p = Pattern.from_str("??34")
     assert bytes(p.data()) == b"\x00\x34"
 
@@ -92,7 +92,7 @@ def test_pattern_data():
     assert bytes(p.data()) == b"\x12\x34"
 
 
-def test_pattern_mask():
+def test_pattern_mask() -> None:
     p = Pattern.from_str("??34")
     assert list(p.mask()) == [0, 1]
 
