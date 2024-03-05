@@ -356,10 +356,6 @@ class FunctionNode(object):
         return result
 
 
-# TrieValueType = List[FunctionNode]
-TrieValueType = Any
-
-
 class TrieNode(object):
     """
     A prefix tree, aka a Trie.
@@ -388,7 +384,7 @@ class TrieNode(object):
         self,
         pattern: Pattern,
         children: Dict[MaskedByte, "TrieNode"],
-        value: TrieValueType,
+        value: Optional[List[FunctionNode]],
     ):
         """
         Don't call me directly. Call new_trie() instead to construct an empty trie and use insert() to add to it.
@@ -411,7 +407,7 @@ class TrieNode(object):
             result += ":" + str(self.value)
         return result
 
-    def find(self, buf: bytes) -> List[TrieValueType]:
+    def find(self, buf: bytes) -> List[FunctionNode]:
         """
         Traverses this prefix trie to find matched function nodes in a specified buffer of data.
         At each trie node visited, all function nodes contained by that node are appended to the results list.
@@ -421,7 +417,7 @@ class TrieNode(object):
         if not self.pattern.matches(buf):
             return []  # no match
 
-        matches: List[TrieValueType] = []
+        matches: List[FunctionNode] = []
         if self.value is not None:
             matches.extend(self.value)
 
@@ -459,6 +455,7 @@ class TrieNode(object):
         self.value = None
         if split_node._is_degenerate() and not split_node.children:
             # print('deleting degenerate node ', repr(split_node))
+            assert split_node.value is not None
             for f in split_node.value:
                 f.ref_count -= 1
             self.children = {}
@@ -470,7 +467,7 @@ class TrieNode(object):
         assert isinstance(child.pattern[0], MaskedByte)
         self.children[child.pattern[0]] = child
 
-    def insert(self, pattern: Pattern, value: TrieValueType) -> bool:
+    def insert(self, pattern: Pattern, value: FunctionNode) -> bool:
         """
         Inserts a new FunctionNode into this trie at the position specified by the pattern (`data`,`mask`).
         To avoid false postitives, the function node may be rejected from the trie and not inserted if the specified
@@ -537,7 +534,7 @@ class TrieNode(object):
             for node in child.all_nodes():
                 yield node
 
-    def all_values(self) -> Generator[TrieValueType, None, None]:
+    def all_values(self) -> Generator[FunctionNode, None, None]:
         """
         Yields function nodes that are directly contained by some trie node within this subtrie.
         Doesn't include "bridge" nodes!

@@ -92,6 +92,7 @@ def test_trie_insert_multiple():
     # root + single child node
     assert len(trie.children) == 1
     assert len(list(trie.all_nodes())) == 2
+    assert trie.value == None
 
     child = trie.children[b("11")]
     assert str(child.pattern) == "1122334455667788"
@@ -124,11 +125,14 @@ def test_trie_insert_multiple():
 
     assert list(trie.children.keys()) == [b("11")]
     c1 = trie.children[b("11")]
+    assert c1.value == None
     assert str(c1.pattern) == "112233445566"
     assert list(c1.children.keys()) == [b("77"), b("00")]
     c2 = c1.children[b("77")]
+    assert c2.value == [node("f1", 1)]
     assert len(list(c2.children)) == 0
     c3 = c1.children[b("00")]
+    assert c3.value == [node("f2", 1)]
     assert len(list(c3.children)) == 0
 
     assert trie.find(bb("1122334455667788")) == [node("f1", 1)]
