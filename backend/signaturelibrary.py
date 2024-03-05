@@ -44,6 +44,7 @@ from dataclasses import dataclass, field
 MaskType = Literal[0, 1]
 MIN_PATTERN_LENGTH = 8
 
+
 @functools.total_ordering  # for sorted()
 class MaskedByte(object):
     """
@@ -133,6 +134,7 @@ class MaskedByte(object):
             else:
                 return self._value == other._value
         assert type(other) == int
+        assert 0 <= other <= 255
         return self._value == other
 
     # Meet operator
@@ -156,6 +158,15 @@ class MaskedByte(object):
             return self
         else:
             return MaskedByte.wildcard()  # !!
+
+
+def str_to_bytes(s: str) -> bytes:
+    """
+    Converts a string of hex digits to a byte sequence
+    :param s: string of hex digits
+    :return: bytes
+    """
+    return bytes(int(s[i : i + 2], 16) for i in range(0, len(s), 2))
 
 
 class Pattern:
@@ -188,6 +199,9 @@ class Pattern:
         p._array = tuple(MaskedByte.from_str(s[i : i + 2]) for i in range(0, len(s), 2))
         return p
 
+    def to_bytes(self) -> bytes:
+        return bytes(map(lambda b: b.value, self._array))
+
     def __str__(self) -> str:
         return "".join(map(str, self._array))
 
@@ -215,10 +229,10 @@ class Pattern:
     def __hash__(self) -> int:
         return self._array.__hash__()
 
-    def matches(self, buf: "Pattern") -> bool:
+    def matches(self, buf: bytes) -> bool:
         """
         Checks if this Pattern matches `buf`.
-        :param buf: Pattern or bytestring
+        :param buf: bytestring
         :return: True if all bytes matched by `other` are also matched by this
         """
         if len(self._array) > len(buf):
@@ -342,6 +356,7 @@ class FunctionNode(object):
         return result
 
 
+# TrieValueType = List[FunctionNode]
 TrieValueType = Any
 
 
@@ -396,15 +411,14 @@ class TrieNode(object):
             result += ":" + str(self.value)
         return result
 
-    def find(self, buf: Pattern) -> List[TrieValueType]:
+    def find(self, buf: bytes) -> List[TrieValueType]:
         """
         Traverses this prefix trie to find matched function nodes in a specified buffer of data.
         At each trie node visited, all function nodes contained by that node are appended to the results list.
-        :param buf: bytes-like object
+        :param buf: bytestring
         :return: a list of `FunctionNode`s which match the given bytes
         """
         if not self.pattern.matches(buf):
-            # print('no match', self)
             return []  # no match
 
         matches: List[TrieValueType] = []
@@ -412,22 +426,17 @@ class TrieNode(object):
             matches.extend(self.value)
 
         if len(self.pattern) == len(buf):
-            # print('return matches1', len(self.pattern), len(buf))
             return matches
-        buf = buf.slice(slice(len(self.pattern), None))
+        buf = buf[len(self.pattern) :]
 
-        next_byte = MaskedByte.new(buf[0].value, 1)
-        # print('next_byte', next_byte)
+        next_byte = MaskedByte.new(buf[0], 1)
         if next_byte in self.children:
-            # print('trying children1', self.children[next_byte])
             matches.extend(self.children[next_byte].find(buf))
 
         wildcard = MaskedByte.wildcard()
         if wildcard in self.children:
-            # print('trying children2', self.children[wildcard])
             matches.extend(self.children[wildcard].find(buf))
 
-        # print('return matches2', matches)
         return matches
 
     def _is_degenerate(self) -> bool:

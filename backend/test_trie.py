@@ -1,5 +1,11 @@
 from . import signaturelibrary as sl
-from .signaturelibrary import MaskedByte, Pattern, FunctionInfo, FunctionNode
+from .signaturelibrary import (
+    MaskedByte,
+    Pattern,
+    FunctionInfo,
+    FunctionNode,
+    str_to_bytes,
+)
 
 from . import trie_ops
 import pytest
@@ -22,6 +28,9 @@ def test_function_node_new():
 
 def b(s: str) -> MaskedByte:
     return MaskedByte.from_str(s)
+
+
+bb = str_to_bytes
 
 
 def p(s: str) -> Pattern:
@@ -90,7 +99,7 @@ def test_trie_insert_multiple():
     assert len(child.value) == 3
     assert list(child.value) == [node("f1", 1), node("f2", 1), node("f3", 1)]
 
-    assert trie.find(p("1122334455667788")) == [
+    assert trie.find(bb("1122334455667788")) == [
         node("f1", 1),
         node("f2", 1),
         node("f3", 1),
@@ -122,9 +131,9 @@ def test_trie_insert_multiple():
     c3 = c1.children[b("00")]
     assert len(list(c3.children)) == 0
 
-    assert trie.find(p("1122334455667788")) == [node("f1", 1)]
-    assert trie.find(p("??22334455667788")) == []
-    assert trie.find(p("1122334455660088")) == [node("f2", 1)]
+    assert trie.find(bb("1122334455667788")) == [node("f1", 1)]
+    assert trie.find(bb("1122334455660088")) == [node("f2", 1)]
+
 
 def test_trie_find_wildcard():
     funcs = {
@@ -136,9 +145,13 @@ def test_trie_find_wildcard():
     trie = sl.new_trie()
     assert trie_ops.trie_insert_funcs(trie, funcs) == 3
 
-    assert trie.find(p("112233445566778899")) == [node("f3", 1), node("f2", 1), node("f1", 1)]
-    assert trie.find(p("992233445566778899")) == [node("f1", 1)]
-    assert trie.find(p("112299445566778899")) == [node("f3", 1)]
+    assert trie.find(bb("112233445566778899")) == [
+        node("f3", 1),
+        node("f2", 1),
+        node("f1", 1),
+    ]
+    assert trie.find(bb("992233445566778899")) == [node("f1", 1)]
+    assert trie.find(bb("112299445566778899")) == [node("f3", 1)]
 
 
 def test_trie_finalize():

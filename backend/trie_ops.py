@@ -135,13 +135,13 @@ def is_signature_subset(
         for a_pattern in func_info[a].patterns:
             # if A is a subset of B, then B >= A; i.e., searching the trie for A's data should match B.
             # A <= B --> A ⨅ B = B
-            if b not in sig_trie.find(a_pattern):
+            if b not in sig_trie.find(a_pattern.to_bytes()):
                 return False
 
     # return false if B's additional pattern doesn't match A (B ⨅ A != B)
     for a_pattern in func_info[a].patterns:
         if b.pattern_offset >= 0 and b.pattern_offset + len(b.pattern) < len(a_pattern):
-            if not b.pattern.matches(a_pattern.slice(slice(b.pattern_offset, None))):
+            if not b.pattern.matches(a_pattern.to_bytes()[b.pattern_offset:]):
                 return False
 
     # check that all callees required by B are also required by A
@@ -273,7 +273,7 @@ def find_redundant(
 
     for func in info1:  # func is our `A`
         for pattern in info1[func].patterns:
-            candidates = trie1.find(pattern)
+            candidates = trie1.find(pattern.to_bytes())
             for cand in candidates:  # cand is our `B`
                 check_if_redundant(func, cand)
 

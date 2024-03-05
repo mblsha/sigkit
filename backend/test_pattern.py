@@ -1,4 +1,4 @@
-from .signaturelibrary import Pattern, MaskedByte
+from .signaturelibrary import Pattern, MaskedByte, str_to_bytes
 
 
 def test_pattern_new():
@@ -20,18 +20,36 @@ def test_pattern_from_str():
     assert p[1] == MaskedByte.new(0x34, 1)
 
 
+def test_str_to_bytes():
+    assert str_to_bytes("") == b""
+    assert str_to_bytes("1234") == b"\x12\x34"
+    assert str_to_bytes("123") == b"\x12\x03"
+
+
+def test_pattern_to_bytes():
+    b = str_to_bytes
+    p = Pattern.from_str
+
+    assert p("0034").to_bytes() == b("0034")
+    assert p("??34").to_bytes() == b("0034")
+    assert p("1234").to_bytes() == b("1234")
+
+
 def test_pattern_matches():
-    p = Pattern.from_str("??34")
-    assert p.matches(b"\x12\x34")
+    b = str_to_bytes
+    p = Pattern.from_str
 
-    p = Pattern.from_str("1234")
-    assert p.matches(b"\x12\x34")
+    # same length
+    assert p("??34").matches(b("1234"))
+    assert p("1234").matches(b("1234"))
+    assert not p("??34").matches(b("1235"))
+    assert not p("1234").matches(b("1235"))
 
-    p = Pattern.from_str("??34")
-    assert not p.matches(b"\x12\x35")
+    # greater length
+    assert not p("123456").matches(b("1234"))
 
-    p = Pattern.from_str("1234")
-    assert not p.matches(b"\x12\x35")
+    # smaller length
+    assert p("1234").matches(b("123456"))
 
 
 def test_pattern_intersect():

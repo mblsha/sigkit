@@ -50,6 +50,8 @@ def test_maskedbyte_matches():
     assert MaskedByte.new(0x12, 1).matches(0x12)
     assert not MaskedByte.new(0x12, 1).matches(0x13)
 
+    assert MaskedByte.new(0x12, 0).matches(0x12)
+    assert MaskedByte.new(0x12, 0).matches(0x13)
 
 def test_maskedbyte_intersect():
     a = MaskedByte.new(0x12, 1)
