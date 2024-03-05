@@ -324,7 +324,18 @@ class FunctionNode(object):
     ref_count: int = 0
 
     def __hash__(self) -> int:
-        return hash((self.name, self.source_binary))
+        return hash((self.name, self.source_binary, self.pattern, self.pattern_offset))
+
+    def __eq__(self, other: object) -> bool:
+        if not type(other) == type(self):
+            return False
+        other = cast(FunctionNode, other)
+        return (
+            self.name == other.name
+            and self.source_binary == other.source_binary
+            and self.pattern == other.pattern
+            and self.pattern_offset == other.pattern_offset
+        )
 
     @property
     def is_bridge(self) -> bool:

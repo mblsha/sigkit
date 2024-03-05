@@ -24,10 +24,13 @@ JSON serialization / deserialization
 
 import json
 
-from . import signaturelibrary
+from .signaturelibrary import MaskedByte, Pattern, TrieNode, FunctionNode
+from typing import List, Dict, Any, Optional
 
 
-def _serialize_func_node(func_node, func_node_ids):
+def _serialize_func_node(
+    func_node: FunctionNode, func_node_ids: Dict[Optional[FunctionNode], int]
+) -> Dict[str, Any]:
     return {
         "name": func_node.name,
         "source_binary": func_node.source_binary,
@@ -41,7 +44,9 @@ def _serialize_func_node(func_node, func_node_ids):
     }
 
 
-def _serialize_trie_node(trie_node, func_node_ids):
+def _serialize_trie_node(
+    trie_node: TrieNode, func_node_ids: Dict[Optional[FunctionNode], int]
+) -> Dict[str, Any]:
     children = {
         str(k): _serialize_trie_node(v, func_node_ids)
         for k, v in trie_node.children.items()
@@ -57,16 +62,18 @@ def _serialize_trie_node(trie_node, func_node_ids):
     }
 
 
-def serialize(sig_trie):
+def serialize(sig_trie: TrieNode) -> Dict[str, Any]:
     """
     Serialize a signature trie to a JSON-compatible format.
     :param sig_trie: `TrieNode` object
     :return: a python dictionary ready for serialization as JSON
     """
-    func_nodes = []
-    func_node_ids = {None: -1}
+    func_nodes: List[FunctionNode] = []
+    func_node_ids: Dict[Optional[FunctionNode], int] = {None: -1}
 
-    def visit(func_node):
+    def visit(func_node: Optional[FunctionNode]) -> None:
+        if not func_node:
+            return
         if func_node in func_node_ids:
             return
         func_node_ids[func_node] = len(func_nodes)
@@ -89,12 +96,12 @@ def serialize(sig_trie):
     }
 
 
-def _deserialize_pattern(serialized):
-    return signaturelibrary.Pattern.from_str(serialized)
+def _deserialize_pattern(serialized: str) -> Pattern:
+    return Pattern.from_str(serialized)
 
 
-def _deserialize_func_node(serialized):
-    func_node = signaturelibrary.FunctionNode(serialized["name"])
+def _deserialize_func_node(serialized: Dict[str, Any]) -> FunctionNode:
+    func_node = FunctionNode(serialized["name"])
     func_node.source_binary = serialized["source_binary"]
     func_node.pattern = _deserialize_pattern(serialized["pattern"])
     func_node.pattern_offset = serialized["pattern_offset"]
@@ -102,13 +109,13 @@ def _deserialize_func_node(serialized):
     return func_node
 
 
-def _deserialize_trie_node(serialized, funcs_arr):
-    return signaturelibrary.TrieNode(
+def _deserialize_trie_node(
+    serialized: Dict[str, Any], funcs_arr: List[FunctionNode]
+) -> TrieNode:
+    return TrieNode(
         _deserialize_pattern(serialized["pattern"]),
         {
-            signaturelibrary.MaskedByte.from_str(k): _deserialize_trie_node(
-                v, funcs_arr
-            )
+            MaskedByte.from_str(k): _deserialize_trie_node(v, funcs_arr)
             for k, v in serialized["children"].items()
         },
         [funcs_arr[i] for i in serialized["functions"]]
@@ -117,7 +124,7 @@ def _deserialize_trie_node(serialized, funcs_arr):
     )
 
 
-def deserialize(serialized):
+def deserialize(serialized: Dict[str, Any]) -> TrieNode:
     """
     Deserialize a signature trie from JSON data.
     :param serialized: a dict containing JSON-format data to signature trie objects.
@@ -134,17 +141,17 @@ def deserialize(serialized):
     return _deserialize_trie_node(serialized["trie"], funcs)
 
 
-def dumps(sig_trie, *args, **kwargs):
+def dumps(sig_trie: TrieNode, *args, **kwargs) -> str:  # type: ignore
     return json.dumps(serialize(sig_trie), *args, **kwargs)
 
 
-def dump(sig_trie, fp, *args, **kwargs):
+def dump(sig_trie: TrieNode, fp, *args, **kwargs) -> None:  # type: ignore
     return json.dump(serialize(sig_trie), fp, *args, **kwargs)
 
 
-def loads(serialized, *args, **kwargs):
+def loads(serialized: str, *args, **kwargs) -> TrieNode:  # type: ignore
     return deserialize(json.loads(serialized, *args, **kwargs))
 
 
-def load(fp, *args, **kwargs):
+def load(fp, *args, **kwargs) -> TrieNode:  # type: ignore
     return deserialize(json.load(fp, *args, **kwargs))
