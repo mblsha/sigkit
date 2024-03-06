@@ -26,10 +26,10 @@ import sys
 import os
 
 from ..backend import binja_api
-from ..backend.signaturelibrary import TrieNode
+from ..backend.signaturelibrary import TrieNode, FunctionNode
 import binaryninjaui
 
-from typing import Any, Optional
+from typing import List, Set, Any, Optional
 
 if "qt_major_version" in binaryninjaui.__dict__ and binaryninjaui.qt_major_version == 6:
     from PySide6.QtCore import (
@@ -260,46 +260,46 @@ class App(QMainWindow):  # type: ignore
         if not ok or not query_string:
             return
 
-        self.searchResults = self.model.findItems(
+        self.searchResults = self.model.findItems(  # type: ignore
             query_string, Qt.MatchContains | Qt.MatchRecursive, 1
         )
 
         if self.searchResults:
-            self.findNextAction.setEnabled(True)
-            self.findPrevAction.setEnabled(True)
+            self.findNextAction.setEnabled(True)  # type: ignore
+            self.findPrevAction.setEnabled(True)  # type: ignore
             self.searchIndex = 0
             self.select_next()
         else:
-            self.findNextAction.setEnabled(False)
-            self.findPrevAction.setEnabled(False)
+            self.findNextAction.setEnabled(False)  # type: ignore
+            self.findPrevAction.setEnabled(False)  # type: ignore
             self.searchIndex = -1
             QMessageBox.warning(self, "Find in Trie", "No results found")
 
     def select_next(self):  # type: ignore
-        next_item = self.searchResults[self.searchIndex]
-        self.searchIndex = (self.searchIndex + 1) % len(self.searchResults)
+        next_item = self.searchResults[self.searchIndex]  # type: ignore
+        self.searchIndex = (self.searchIndex + 1) % len(self.searchResults)  # type: ignore
         self.select_tree_item(next_item)
 
     def select_prev(self):  # type: ignore
-        prev_item = self.searchResults[self.searchIndex]
-        self.searchIndex = (self.searchIndex - 1) % len(self.searchResults)
+        prev_item = self.searchResults[self.searchIndex]  # type: ignore
+        self.searchIndex = (self.searchIndex - 1) % len(self.searchResults)  # type: ignore
         self.select_tree_item(prev_item)
 
     def select_tree_item(self, item):  # type: ignore
-        path = []
+        path: List[int] = []
         while item:
-            path.insert(0, self.model.indexFromItem(item))
+            path.insert(0, self.model.indexFromItem(item))  # type: ignore
             item = item.parent()
         # print(path)
         for index in path:
-            self.treeView.setExpanded(index, True)
-        self.treeView.selectionModel().select(
+            self.treeView.setExpanded(index, True)  # type: ignore
+        self.treeView.selectionModel().select(  # type: ignore
             path[-1], QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows
         )
-        self.treeView.scrollTo(path[-1])
+        self.treeView.scrollTo(path[-1])  # type: ignore
 
     def close_file(self):  # type: ignore
-        self.model.removeRows(0, self.model.rowCount())
+        self.model.removeRows(0, self.model.rowCount())  # type: ignore
         self.sig_trie = None
         self.hrefs_to_funcs = {}
         self.func_node_items = {}
@@ -417,7 +417,7 @@ class App(QMainWindow):  # type: ignore
         parent.appendRow(cols)
 
     # Recursively add rows for this trie node and its children
-    def add_trie_node(self, parent, pattern_text, node):  # type: ignore
+    def add_trie_node(self, parent, pattern_text: str, node: TrieNode):  # type: ignore
         left_item = QStandardItem(pattern_text)
 
         if not node.value:  # Stem node
@@ -428,13 +428,13 @@ class App(QMainWindow):  # type: ignore
                 self.add_func_node(parent, QStandardItem(""), func)
 
         pairs = map(lambda node: (str(node.pattern), node), node.children.values())
-        pairs = sorted(pairs, key=lambda kv: kv[0].replace("?", "\xff"))
+        pairs = sorted(pairs, key=lambda kv: kv[0].replace("?", "\xff"))  # type: ignore
         for text, child in pairs:
             self.add_trie_node(left_item, text, child)
         return left_item
 
     # Add bridge nodes to a special node at the root
-    def add_bridge_nodes(self, parent, sig_trie):  # type: ignore
+    def add_bridge_nodes(self, parent, sig_trie: TrieNode):  # type: ignore
         bridge_item = QStandardItem("(bridge)")
         parent.appendRow([bridge_item, QStandardItem("")])
 
@@ -447,7 +447,7 @@ class App(QMainWindow):  # type: ignore
             for callee in func.callees.values():
                 visit(callee, visited)
 
-        visited = set()
+        visited: Set[FunctionNode] = set()
         for func in sig_trie.all_values():
             visit(func, visited)
 
