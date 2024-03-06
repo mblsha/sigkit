@@ -39,7 +39,7 @@ from collections import defaultdict
 from functools import reduce
 import operator
 
-from .symbol_type import SymbolType
+from .binja_api import SymbolType
 from .signaturelibrary import TrieNode, FunctionInfo, FunctionNode, Pattern
 from typing import List, Set, Dict, Optional, Tuple
 

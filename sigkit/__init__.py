@@ -1,8 +1,11 @@
-try:
-    from binaryninja import core_ui_enabled, PluginCommand
-except ImportError:
-    def core_ui_enabled():
-        return False
+from ..backend import binja_api
+from binaryninja import (
+    core_ui_enabled,
+    PluginCommand,
+    log,
+    get_save_filename_input,
+    BinaryView,
+)
 
 # exports
 from ..backend import trie_ops
@@ -12,11 +15,15 @@ from ..backend import sig_serialize_json
 from ..backend.signaturelibrary import TrieNode, FunctionNode, Pattern, MaskedByte
 from .compute_sig import process_function as generate_function_signature
 
+from typing import Optional
+
 if core_ui_enabled():
-    from .sigexplorer import explore_signature_library
+    from .sigexplorer import explore_signature_library, App
     import binaryninjaui
 
-    def signature_explorer(prompt=True):
+    widget: Optional[App] = None
+
+    def signature_explorer(prompt: bool = True) -> App:
         """
         Open the signature explorer UI.
         :param prompt: if True, prompt the user to open a file immediately.
@@ -31,7 +38,7 @@ if core_ui_enabled():
             from PySide2.QtWidgets import QApplication
         app = QApplication.instance()
         global widget  # avoid lifetime issues from it falling out of scope
-        widget = sigexplorer.App()
+        widget = App()
         if prompt:
             widget.open_file()
         widget.show()
@@ -40,7 +47,7 @@ if core_ui_enabled():
         return widget
 
     # UI plugin code
-    def _generate_signature_library(bv):
+    def _generate_signature_library(bv: BinaryView) -> None:
         guess_relocs = len(bv.relocation_ranges) == 0
         if guess_relocs:
             log.log_debug(

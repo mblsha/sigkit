@@ -40,7 +40,7 @@ from typing import (
     Iterator,
 )
 from dataclasses import dataclass, field
-from .symbol_type import SymbolType
+from .binja_api import SymbolType
 
 MaskType = Literal[0, 1]
 MIN_PATTERN_LENGTH = 8

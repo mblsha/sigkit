@@ -25,7 +25,11 @@ from __future__ import print_function
 import sys
 import os
 
+from ..backend import binja_api
+from ..backend.signaturelibrary import TrieNode
 import binaryninjaui
+
+from typing import Any, Optional
 
 if "qt_major_version" in binaryninjaui.__dict__ and binaryninjaui.qt_major_version == 6:
     from PySide6.QtCore import (
@@ -35,6 +39,8 @@ if "qt_major_version" in binaryninjaui.__dict__ and binaryninjaui.qt_major_versi
         QItemSelection,
         QSize,
         Signal,
+        QPoint,
+        QEvent,
     )
     from PySide6.QtGui import (
         QStandardItemModel,
@@ -126,7 +132,7 @@ from ..backend import sig_serialize_fb
 
 
 class App(QMainWindow):  # type: ignore
-    def __init__(self):
+    def __init__(self):  # type: ignore
         super(App, self).__init__()
 
         self.treeView = None
@@ -148,7 +154,7 @@ class App(QMainWindow):  # type: ignore
 
         self.init_ui()
 
-    def init_ui(self):
+    def init_ui(self):  # type: ignore
         self.setWindowTitle("Signature Explorer")
         self.resize(1000, 640)
         app_icon = QIcon()
@@ -249,7 +255,7 @@ class App(QMainWindow):  # type: ignore
 
         menuBar.addMenu(viewMenu)
 
-    def search(self):
+    def search(self):  # type: ignore
         query_string, ok = QInputDialog.getText(self, "Find in Trie", "Function name")
         if not ok or not query_string:
             return
@@ -269,17 +275,17 @@ class App(QMainWindow):  # type: ignore
             self.searchIndex = -1
             QMessageBox.warning(self, "Find in Trie", "No results found")
 
-    def select_next(self):
+    def select_next(self):  # type: ignore
         next_item = self.searchResults[self.searchIndex]
         self.searchIndex = (self.searchIndex + 1) % len(self.searchResults)
         self.select_tree_item(next_item)
 
-    def select_prev(self):
+    def select_prev(self):  # type: ignore
         prev_item = self.searchResults[self.searchIndex]
         self.searchIndex = (self.searchIndex - 1) % len(self.searchResults)
         self.select_tree_item(prev_item)
 
-    def select_tree_item(self, item):
+    def select_tree_item(self, item):  # type: ignore
         path = []
         while item:
             path.insert(0, self.model.indexFromItem(item))
@@ -292,13 +298,13 @@ class App(QMainWindow):  # type: ignore
         )
         self.treeView.scrollTo(path[-1])
 
-    def close_file(self):
+    def close_file(self):  # type: ignore
         self.model.removeRows(0, self.model.rowCount())
         self.sig_trie = None
         self.hrefs_to_funcs = {}
         self.func_node_items = {}
 
-    def open_file(self):
+    def open_file(self):  # type: ignore
         sig_filter = "Signature library (*.sig)"
         json_zlib_filter = "Compressed JSON signature library (*.json.zlib)"
         json_filter = "JSON signature library (*.json)"
@@ -331,7 +337,7 @@ class App(QMainWindow):  # type: ignore
 
         self.open_trie(sig_trie, os.path.basename(fname))
 
-    def save_as(self):
+    def save_as(self):  # type: ignore
         sig_filter = "Signature library (*.sig)"
         json_zlib_filter = "Compressed JSON signature library (*.json.zlib)"
         json_filter = "JSON signature library (*.json)"
@@ -365,10 +371,10 @@ class App(QMainWindow):  # type: ignore
         print("Saved as " + fname)
 
     @staticmethod
-    def generate_href(func):
+    def generate_href(func):  # type: ignore
         return str(id(func))
 
-    def get_func_name(self, func_node):
+    def get_func_name(self, func_node):  # type: ignore
         if func_node is None:
             return "<missing>"
         else:
@@ -381,12 +387,12 @@ class App(QMainWindow):  # type: ignore
             )
 
     # handles when the user clicks on a hyperlink to a function node
-    def on_func_link_clicked(self, link):
+    def on_func_link_clicked(self, link):  # type: ignore
         print("Hyperlink clicked: " + link)
         self.select_tree_item(self.func_node_items[self.hrefs_to_funcs[link]])
 
     # Generate treeview row for function (leaf) node in the trie
-    def add_func_node(self, parent, pattern_col_item, func):
+    def add_func_node(self, parent, pattern_col_item, func):  # type: ignore
         self.hrefs_to_funcs[self.generate_href(func)] = func
         self.func_node_items[func] = pattern_col_item
 
@@ -411,7 +417,7 @@ class App(QMainWindow):  # type: ignore
         parent.appendRow(cols)
 
     # Recursively add rows for this trie node and its children
-    def add_trie_node(self, parent, pattern_text, node):
+    def add_trie_node(self, parent, pattern_text, node):  # type: ignore
         left_item = QStandardItem(pattern_text)
 
         if not node.value:  # Stem node
@@ -428,11 +434,11 @@ class App(QMainWindow):  # type: ignore
         return left_item
 
     # Add bridge nodes to a special node at the root
-    def add_bridge_nodes(self, parent, sig_trie):
+    def add_bridge_nodes(self, parent, sig_trie):  # type: ignore
         bridge_item = QStandardItem("(bridge)")
         parent.appendRow([bridge_item, QStandardItem("")])
 
-        def visit(func, visited):
+        def visit(func, visited):  # type: ignore
             if func is None or func in visited:
                 return
             visited.add(func)
@@ -445,7 +451,7 @@ class App(QMainWindow):  # type: ignore
         for func in sig_trie.all_values():
             visit(func, visited)
 
-    def open_trie(self, sig_trie, filename):
+    def open_trie(self, sig_trie, filename):  # type: ignore
         self.close_file()
         self.sig_trie = sig_trie
         root_node = self.add_trie_node(self.model, filename, sig_trie)
@@ -454,11 +460,11 @@ class App(QMainWindow):  # type: ignore
 
 # copy-pasted off https://stackoverflow.com/questions/55923137/ lol
 class PatternDelegate(QStyledItemDelegate):  # type: ignore
-    def __init__(self):
+    def __init__(self):  # type: ignore
         super(PatternDelegate, self).__init__()
         self.font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
 
-    def paint(self, painter, option, index):
+    def paint(self, painter, option, index):  # type: ignore
         if index.data() is None:
             return
         painter.save()
@@ -522,10 +528,10 @@ class PatternDelegate(QStyledItemDelegate):  # type: ignore
 
 # https://stackoverflow.com/questions/35397943/how-to-make-a-fast-qtableview-with-html-formatted-and-clickable-cells
 class CalleesDelegate(QStyledItemDelegate):  # type: ignore
-    def __init__(self):
+    def __init__(self):  # type: ignore
         super(CalleesDelegate, self).__init__()
 
-    def anchorAt(self, html, point):
+    def anchorAt(self, html, point: QPoint) -> Any:  # type: ignore
         doc = QTextDocument()
         doc.setHtml(html)
 
@@ -533,7 +539,7 @@ class CalleesDelegate(QStyledItemDelegate):  # type: ignore
         assert textLayout != None
         return textLayout.anchorAt(point)
 
-    def paint(self, painter, option, index):
+    def paint(self, painter, option, index):  # type: ignore
         options = option
         self.initStyleOption(options, index)
 
@@ -553,7 +559,7 @@ class CalleesDelegate(QStyledItemDelegate):  # type: ignore
 
         painter.restore()
 
-    def sizeHint(self, option, index):
+    def sizeHint(self, option, index: int) -> QSize:  # type: ignore
         options = option
         self.initStyleOption(options, index)
 
@@ -568,18 +574,18 @@ class TrieView(QTreeView):  # type: ignore
     linkHovered = Signal(str)
     linkActivated = Signal(str)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs):  # type: ignore
         super(TrieView, self).__init__(*args, **kwargs)
         self.setMouseTracking(True)
         self._mousePressAnchor = ""
         self._lastHoveredAnchor = ""
 
-    def mousePressEvent(self, event):
+    def mousePressEvent(self, event: QEvent) -> None:
         super(TrieView, self).mousePressEvent(event)
         anchor = self.anchorAt(event.pos())
         self._mousePressAnchor = anchor
 
-    def mouseMoveEvent(self, event):
+    def mouseMoveEvent(self, event: QEvent) -> None:
         anchor = self.anchorAt(event.pos())
 
         if self._mousePressAnchor != anchor:
@@ -594,7 +600,7 @@ class TrieView(QTreeView):  # type: ignore
                 QApplication.restoreOverrideCursor()
                 self.linkUnhovered.emit()
 
-    def mouseReleaseEvent(self, event):
+    def mouseReleaseEvent(self, event: QEvent) -> None:
         if self._mousePressAnchor:
             anchor = self.anchorAt(event.pos())
 
@@ -605,7 +611,7 @@ class TrieView(QTreeView):  # type: ignore
 
         super(TrieView, self).mouseReleaseEvent(event)
 
-    def anchorAt(self, pos):
+    def anchorAt(self, pos: QPoint) -> Any:
         index = self.indexAt(pos)
         if index.isValid():
             delegate = self.itemDelegate(index)
@@ -621,7 +627,7 @@ class TrieView(QTreeView):  # type: ignore
         return ""
 
 
-def explore_signature_library(sig_trie):
+def explore_signature_library(sig_trie: TrieNode) -> None:
     """
     Display an in-memory signature trie in the signature explorer GUI.
     :param sig_trie: instance of `TrieNode`
