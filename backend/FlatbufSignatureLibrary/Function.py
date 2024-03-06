@@ -8,32 +8,32 @@ class Function(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsFunction(cls, buf, offset):
+    def GetRootAsFunction(cls, buf, offset):  # type: ignore
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = Function()
         x.Init(buf, n + offset)
         return x
 
     # Function
-    def Init(self, buf, pos):
+    def Init(self, buf, pos):  # type: ignore
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # Function
-    def Name(self):
+    def Name(self):  # type: ignore
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
             return self._tab.String(o + self._tab.Pos)
         return None
 
     # Function
-    def SourceBinary(self):
+    def SourceBinary(self):  # type: ignore
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
         if o != 0:
             return self._tab.String(o + self._tab.Pos)
         return None
 
     # Function
-    def Callees(self, j):
+    def Callees(self, j):  # type: ignore
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
         if o != 0:
             x = self._tab.Vector(o)
@@ -45,14 +45,14 @@ class Function(object):
         return None
 
     # Function
-    def CalleesLength(self):
+    def CalleesLength(self):  # type: ignore
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
         if o != 0:
             return self._tab.VectorLen(o)
         return 0
 
     # Function
-    def Pattern(self):
+    def Pattern(self):  # type: ignore
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
         if o != 0:
             x = self._tab.Indirect(o + self._tab.Pos)
@@ -63,25 +63,25 @@ class Function(object):
         return None
 
     # Function
-    def PatternOffset(self):
+    def PatternOffset(self):  # type: ignore
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
         return 0
 
     # Function
-    def IsBridge(self):
+    def IsBridge(self):  # type: ignore
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(14))
         if o != 0:
             return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
         return False
 
-def FunctionStart(builder): builder.StartObject(6)
-def FunctionAddName(builder, name): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(name), 0)
-def FunctionAddSourceBinary(builder, sourceBinary): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(sourceBinary), 0)
-def FunctionAddCallees(builder, callees): builder.PrependUOffsetTRelativeSlot(2, flatbuffers.number_types.UOffsetTFlags.py_type(callees), 0)
-def FunctionStartCalleesVector(builder, numElems): return builder.StartVector(8, numElems, 4)
-def FunctionAddPattern(builder, pattern): builder.PrependUOffsetTRelativeSlot(3, flatbuffers.number_types.UOffsetTFlags.py_type(pattern), 0)
-def FunctionAddPatternOffset(builder, patternOffset): builder.PrependUint32Slot(4, patternOffset, 0)
-def FunctionAddIsBridge(builder, isBridge): builder.PrependBoolSlot(5, isBridge, 0)
-def FunctionEnd(builder): return builder.EndObject()
+def FunctionStart(builder): builder.StartObject(6)  # type: ignore
+def FunctionAddName(builder, name): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(name), 0)  # type: ignore
+def FunctionAddSourceBinary(builder, sourceBinary): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(sourceBinary), 0)  # type: ignore
+def FunctionAddCallees(builder, callees): builder.PrependUOffsetTRelativeSlot(2, flatbuffers.number_types.UOffsetTFlags.py_type(callees), 0) # type: ignore
+def FunctionStartCalleesVector(builder, numElems): return builder.StartVector(8, numElems, 4) # type: ignore
+def FunctionAddPattern(builder, pattern): builder.PrependUOffsetTRelativeSlot(3, flatbuffers.number_types.UOffsetTFlags.py_type(pattern), 0) # type: ignore
+def FunctionAddPatternOffset(builder, patternOffset): builder.PrependUint32Slot(4, patternOffset, 0)  # type: ignore
+def FunctionAddIsBridge(builder, isBridge): builder.PrependBoolSlot(5, isBridge, 0)  # type: ignore
+def FunctionEnd(builder): return builder.EndObject()  # type: ignore

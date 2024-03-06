@@ -4,22 +4,24 @@
 
 import flatbuffers
 
+from typing import Type
+
 class SignatureLibrary(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsSignatureLibrary(cls, buf, offset):
+    def GetRootAsSignatureLibrary(cls: Type["SignatureLibrary"], buf: bytes, offset: int) -> "SignatureLibrary":
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = SignatureLibrary()
         x.Init(buf, n + offset)
         return x
 
     # SignatureLibrary
-    def Init(self, buf, pos):
+    def Init(self, buf, pos):  # type: ignore
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # SignatureLibrary
-    def Functions(self, j):
+    def Functions(self, j):  # type: ignore
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
             x = self._tab.Vector(o)
@@ -32,14 +34,14 @@ class SignatureLibrary(object):
         return None
 
     # SignatureLibrary
-    def FunctionsLength(self):
+    def FunctionsLength(self):  # type: ignore
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
             return self._tab.VectorLen(o)
         return 0
 
     # SignatureLibrary
-    def Root(self):
+    def Root(self):  # type: ignore
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
         if o != 0:
             x = self._tab.Indirect(o + self._tab.Pos)
@@ -49,8 +51,8 @@ class SignatureLibrary(object):
             return obj
         return None
 
-def SignatureLibraryStart(builder): builder.StartObject(2)
-def SignatureLibraryAddFunctions(builder, functions): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(functions), 0)
-def SignatureLibraryStartFunctionsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
-def SignatureLibraryAddRoot(builder, root): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(root), 0)
-def SignatureLibraryEnd(builder): return builder.EndObject()
+def SignatureLibraryStart(builder): builder.StartObject(2)  # type: ignore
+def SignatureLibraryAddFunctions(builder, functions): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(functions), 0)  # type: ignore
+def SignatureLibraryStartFunctionsVector(builder, numElems): return builder.StartVector(4, numElems, 4)  # type: ignore
+def SignatureLibraryAddRoot(builder, root): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(root), 0)  # type: ignore
+def SignatureLibraryEnd(builder): return builder.EndObject()  # type: ignore

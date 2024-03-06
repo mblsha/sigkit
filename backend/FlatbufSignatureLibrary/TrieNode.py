@@ -8,25 +8,25 @@ class TrieNode(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsTrieNode(cls, buf, offset):
+    def GetRootAsTrieNode(cls, buf, offset):  # type: ignore
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = TrieNode()
         x.Init(buf, n + offset)
         return x
 
     # TrieNode
-    def Init(self, buf, pos):
+    def Init(self, buf, pos):  # type: ignore
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # TrieNode
-    def PatternPrefix(self):
+    def PatternPrefix(self):  # type: ignore
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
         return 0
 
     # TrieNode
-    def Pattern(self):
+    def Pattern(self):  # type: ignore
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
         if o != 0:
             x = self._tab.Indirect(o + self._tab.Pos)
@@ -37,7 +37,7 @@ class TrieNode(object):
         return None
 
     # TrieNode
-    def Children(self, j):
+    def Children(self, j):  # type: ignore
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
         if o != 0:
             x = self._tab.Vector(o)
@@ -50,14 +50,14 @@ class TrieNode(object):
         return None
 
     # TrieNode
-    def ChildrenLength(self):
+    def ChildrenLength(self):  # type: ignore
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
         if o != 0:
             return self._tab.VectorLen(o)
         return 0
 
     # TrieNode
-    def WildcardChild(self):
+    def WildcardChild(self):  # type: ignore
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
         if o != 0:
             x = self._tab.Indirect(o + self._tab.Pos)
@@ -68,7 +68,7 @@ class TrieNode(object):
         return None
 
     # TrieNode
-    def Functions(self, j):
+    def Functions(self, j):  # type: ignore
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
         if o != 0:
             a = self._tab.Vector(o)
@@ -76,25 +76,25 @@ class TrieNode(object):
         return 0
 
     # TrieNode
-    def FunctionsAsNumpy(self):
+    def FunctionsAsNumpy(self):  # type: ignore
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
         if o != 0:
             return self._tab.GetVectorAsNumpy(flatbuffers.number_types.Uint32Flags, o)
         return 0
 
     # TrieNode
-    def FunctionsLength(self):
+    def FunctionsLength(self):  # type: ignore
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
         if o != 0:
             return self._tab.VectorLen(o)
         return 0
 
-def TrieNodeStart(builder): builder.StartObject(5)
-def TrieNodeAddPatternPrefix(builder, patternPrefix): builder.PrependUint8Slot(0, patternPrefix, 0)
-def TrieNodeAddPattern(builder, pattern): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(pattern), 0)
-def TrieNodeAddChildren(builder, children): builder.PrependUOffsetTRelativeSlot(2, flatbuffers.number_types.UOffsetTFlags.py_type(children), 0)
-def TrieNodeStartChildrenVector(builder, numElems): return builder.StartVector(4, numElems, 4)
-def TrieNodeAddWildcardChild(builder, wildcardChild): builder.PrependUOffsetTRelativeSlot(3, flatbuffers.number_types.UOffsetTFlags.py_type(wildcardChild), 0)
-def TrieNodeAddFunctions(builder, functions): builder.PrependUOffsetTRelativeSlot(4, flatbuffers.number_types.UOffsetTFlags.py_type(functions), 0)
-def TrieNodeStartFunctionsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
-def TrieNodeEnd(builder): return builder.EndObject()
+def TrieNodeStart(builder): builder.StartObject(5)  # type: ignore
+def TrieNodeAddPatternPrefix(builder, patternPrefix): builder.PrependUint8Slot(0, patternPrefix, 0)  # type: ignore
+def TrieNodeAddPattern(builder, pattern): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(pattern), 0) # type: ignore
+def TrieNodeAddChildren(builder, children): builder.PrependUOffsetTRelativeSlot(2, flatbuffers.number_types.UOffsetTFlags.py_type(children), 0)  # type: ignore
+def TrieNodeStartChildrenVector(builder, numElems): return builder.StartVector(4, numElems, 4)  # type: ignore
+def TrieNodeAddWildcardChild(builder, wildcardChild): builder.PrependUOffsetTRelativeSlot(3, flatbuffers.number_types.UOffsetTFlags.py_type(wildcardChild), 0)  # type: ignore
+def TrieNodeAddFunctions(builder, functions): builder.PrependUOffsetTRelativeSlot(4, flatbuffers.number_types.UOffsetTFlags.py_type(functions), 0)  # type: ignore
+def TrieNodeStartFunctionsVector(builder, numElems): return builder.StartVector(4, numElems, 4)  # type: ignore
+def TrieNodeEnd(builder): return builder.EndObject()  # type: ignore

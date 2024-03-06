@@ -25,7 +25,6 @@ Flatbuffers serialization / deserialization
 import zlib
 import flatbuffers
 
-from . import signaturelibrary
 from .FlatbufSignatureLibrary import CallRef as FlatBufCallRef
 from .FlatbufSignatureLibrary import Function as FlatBufFunction
 from .FlatbufSignatureLibrary import Pattern as FlatBufPattern
@@ -35,39 +34,43 @@ from .FlatbufSignatureLibrary import TrieNode as FlatBufTrieNode
 SIG_FORMAT_MAGIC = b"BNSG"
 SIG_FORMAT_VERSION = 1
 
+from .signaturelibrary import MaskedByte, Pattern, TrieNode, FunctionNode, MaskType
+from typing import Optional, List, Dict, Any
+
+FBSerialized = Any
+
 
 class SignatureLibraryWriter(object):
     """
     Serializes signature libraries to a compressed Flatbuffer format usable by Binary Ninja.
     """
 
-    def __init__(self, include_source=False):
+    def __init__(self, include_source: bool = False):
         self.builder = flatbuffers.Builder(4096)
-        self.func_node_ids = {None: -1}
-        self._bytes_cache = {}
-        self._str_cache = {}
-        self._pattern_cache = {}
+        self.func_node_ids: Dict[Optional[FunctionNode], int] = {None: -1}
+        self._bytes_cache: Dict[bytes, FBSerialized] = {}
+        self._str_cache: Dict[str, FBSerialized] = {}
+        self._pattern_cache: Dict[Pattern, FBSerialized] = {}
         self.include_source = include_source
 
-    def _serialize_bytes(self, buf):
+    def _serialize_bytes(self, buf: bytes) -> FBSerialized:
         if buf not in self._bytes_cache:
             self._bytes_cache[buf] = self.builder.CreateByteVector(buf)
         return self._bytes_cache[buf]
 
-    def _serialize_string(self, s):
+    def _serialize_string(self, s: str) -> FBSerialized:
         if s not in self._str_cache:
             self._str_cache[s] = self.builder.CreateString(s)
         return self._str_cache[s]
 
-    def _serialize_pattern_mask(self, mask):
+    def _serialize_pattern_mask(self, mask: bytes) -> FBSerialized:
         mask = bytearray(mask)
         packed = bytearray((len(mask) + 7) // 8)
         for i in range(len(mask)):
             packed[i // 8] |= mask[i] << (i % 8)
-        packed = bytes(packed)
-        return self._serialize_bytes(packed)
+        return self._serialize_bytes(bytes(packed))
 
-    def _serialize_pattern(self, pattern):
+    def _serialize_pattern(self, pattern: Pattern) -> FBSerialized:
         if pattern not in self._pattern_cache:
             data = self._serialize_bytes(bytes(bytearray(pattern.data())))
             mask = self._serialize_pattern_mask(bytes(bytearray(pattern.mask())))
@@ -77,7 +80,7 @@ class SignatureLibraryWriter(object):
             self._pattern_cache[pattern] = FlatBufPattern.PatternEnd(self.builder)
         return self._pattern_cache[pattern]
 
-    def _serialize_func_node(self, func_node):
+    def _serialize_func_node(self, func_node: FunctionNode) -> FBSerialized:
         func_name = self._serialize_string(func_node.name)
         if self.include_source and func_node.source_binary:
             source_binary = self._serialize_string(func_node.source_binary)
@@ -119,13 +122,15 @@ class SignatureLibraryWriter(object):
             )
         return FlatBufFunction.FunctionEnd(self.builder)
 
-    def _serialize_trie_node(self, trie_node, key=None):
+    def _serialize_trie_node(
+        self, trie_node: TrieNode, key: Optional[int] = None
+    ) -> FBSerialized:
         pattern = self._serialize_pattern(trie_node.pattern)
         if trie_node.children:
             children_offs = [
                 self._serialize_trie_node(v, k.value)
                 for k, v in sorted(trie_node.children.items())
-                if k != signaturelibrary.MaskedByte.wildcard
+                if k != MaskedByte.wildcard()
             ]
             FlatBufTrieNode.TrieNodeStartChildrenVector(
                 self.builder, len(children_offs)
@@ -135,9 +140,9 @@ class SignatureLibraryWriter(object):
             ):  # this needs reversed() because we build flatbuffers by prepending
                 self.builder.PrependUOffsetTRelative(off)
             children = self.builder.EndVector(len(children_offs))
-            if signaturelibrary.MaskedByte.wildcard in trie_node.children:
+            if MaskedByte.wildcard() in trie_node.children:
                 wildcard_child = self._serialize_trie_node(
-                    trie_node.children[signaturelibrary.MaskedByte.wildcard]
+                    trie_node.children[MaskedByte.wildcard()]
                 )
             else:
                 wildcard_child = None
@@ -170,7 +175,7 @@ class SignatureLibraryWriter(object):
             FlatBufTrieNode.TrieNodeAddFunctions(self.builder, functions)
         return FlatBufTrieNode.TrieNodeEnd(self.builder)
 
-    def serialize(self, sig_trie):
+    def serialize(self, sig_trie: TrieNode) -> bytes:
         """
         Creates a new Flatbuffer and serializes the specified signature trie to it.
         Returns a binary signature library ready for use with Binary Ninja.
@@ -189,9 +194,11 @@ class SignatureLibraryWriter(object):
                     )
                 )
 
-        func_nodes = []
+        func_nodes: List[FunctionNode] = []
 
-        def visit(func_node):
+        def visit(func_node: Optional[FunctionNode]) -> None:
+            if not func_node:
+                return
             if func_node in self.func_node_ids:
                 return
             self.func_node_ids[func_node] = len(func_nodes)
@@ -232,10 +239,10 @@ class SignatureLibraryReader(object):
     Parses and loads compressed Flatbuffer signature libraries.
     """
 
-    def __init__(self):
-        self.funcs = []
+    def __init__(self) -> None:
+        self.funcs: List[FunctionNode] = []
 
-    def _deserialize_pattern(self, serialized):
+    def _deserialize_pattern(self, serialized: FBSerialized) -> Pattern:
         # we cannot use DataAsNumpy as we don't depend on numpy
         data = bytes(
             bytearray([serialized.Data(i) for i in range(serialized.DataLength())])
@@ -249,10 +256,10 @@ class SignatureLibraryReader(object):
                 if len(mask) == len(data):
                     break
 
-        return signaturelibrary.Pattern(data, mask)
+        return Pattern(data, mask)
 
-    def _deserialize_func_node(self, serialized):
-        func_node = signaturelibrary.FunctionNode(serialized.Name().decode("utf-8"))
+    def _deserialize_func_node(self, serialized: FBSerialized) -> FunctionNode:
+        func_node = FunctionNode(serialized.Name().decode("utf-8"))
         if serialized.SourceBinary():
             func_node.source_binary = serialized.SourceBinary().decode("utf-8")
         # func_node.is_bridge = serialized.IsBridge()
@@ -261,28 +268,26 @@ class SignatureLibraryReader(object):
             func_node.pattern_offset = serialized.PatternOffset()
         return func_node
 
-    def _deserialize_trie_node(self, serialized):
+    def _deserialize_trie_node(self, serialized: FBSerialized) -> TrieNode:
         children = {}
         prev = float("-inf")
         for i in range(serialized.ChildrenLength()):
             child = serialized.Children(i)
             children[
-                signaturelibrary.MaskedByte.new(child.PatternPrefix(), 1)
+                MaskedByte.new(child.PatternPrefix(), 1)
             ] = self._deserialize_trie_node(child)
             assert child.PatternPrefix() >= prev  # assert sorted
             prev = child.PatternPrefix()
         wildcard = serialized.WildcardChild()
         if wildcard:
-            children[
-                signaturelibrary.MaskedByte.wildcard
-            ] = self._deserialize_trie_node(wildcard)
+            children[MaskedByte.wildcard()] = self._deserialize_trie_node(wildcard)
         funcs = []
         for i in range(serialized.FunctionsLength()):
             funcs.append(self.funcs[serialized.Functions(i)])
         pattern = self._deserialize_pattern(serialized.Pattern())
-        return signaturelibrary.TrieNode(pattern, children, funcs)
+        return TrieNode(pattern, children, funcs)
 
-    def deserialize(self, buf):
+    def deserialize(self, buf: bytes) -> TrieNode:
         """
         Loads a signature library from an in-memory buffer.
         This implementation is extremely inefficient! Use it for debugging and signature library generation only.
@@ -297,9 +302,7 @@ class SignatureLibraryReader(object):
                 % (ord(buf[4:5]), SIG_FORMAT_VERSION)
             )
         buf = zlib.decompress(buf[5:])
-        serialized = FlatBufSignatureLibrary.SignatureLibrary.GetRootAsSignatureLibrary(
-            buf, 0
-        )
+        serialized = FlatBufSignatureLibrary.GetRootAsSignatureLibrary(buf, 0)  # type: ignore
         funcs_serialized = []
         for i in range(serialized.FunctionsLength()):
             f = serialized.Functions(i)
@@ -323,17 +326,17 @@ class SignatureLibraryReader(object):
         return trie
 
 
-def dumps(sig_trie, **kwargs):
+def dumps(sig_trie: TrieNode, **kwargs):  # type: ignore
     return SignatureLibraryWriter(**kwargs).serialize(sig_trie)
 
 
-def dump(sig_trie, fp, **kwargs):
+def dump(sig_trie: TrieNode, fp, **kwargs) -> None:  # type: ignore
     fp.write(dumps(sig_trie, **kwargs))
 
 
-def loads(serialized):
+def loads(serialized):  # type: ignore
     return SignatureLibraryReader().deserialize(serialized)
 
 
-def load(fp):
+def load(fp):  # type: ignore
     return loads(fp.read())

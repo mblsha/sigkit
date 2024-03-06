@@ -8,15 +8,15 @@ class CallRef(object):
     __slots__ = ['_tab']
 
     # CallRef
-    def Init(self, buf, pos):
+    def Init(self, buf, pos):  # type: ignore
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # CallRef
-    def Offset(self): return self._tab.Get(flatbuffers.number_types.Int32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0))
+    def Offset(self): return self._tab.Get(flatbuffers.number_types.Int32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0)) # type: ignore
     # CallRef
-    def DstId(self): return self._tab.Get(flatbuffers.number_types.Int32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(4))
+    def DstId(self): return self._tab.Get(flatbuffers.number_types.Int32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(4)) # type: ignore
 
-def CreateCallRef(builder, offset, dstId):
+def CreateCallRef(builder, offset, dstId):  # type: ignore
     builder.Prep(4, 8)
     builder.PrependInt32(dstId)
     builder.PrependInt32(offset)
