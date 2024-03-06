@@ -9,7 +9,7 @@ from ..backend import trie_ops
 from ..backend import sig_serialize_fb
 from ..backend import sig_serialize_json
 
-from ..backend.signaturelibrary import TrieNode, FunctionNode, Pattern, MaskedByte, new_trie
+from ..backend.signaturelibrary import TrieNode, FunctionNode, Pattern, MaskedByte
 from .compute_sig import process_function as generate_function_signature
 
 if core_ui_enabled():
@@ -66,7 +66,7 @@ if core_ui_enabled():
             if bv.get_symbol_at(func.start) is None:
                 continue
 
-            # ignore internal functions from PsyQ-PSX
+            # ignore internal functions
             if func.name.startswith("."):
                 continue
 
@@ -75,7 +75,7 @@ if core_ui_enabled():
             log.log_debug("Processed " + func.name)
 
         log.log_debug("Constructing signature trie")
-        trie = signaturelibrary.new_trie()
+        trie = TrieNode.new_trie()
         trie_ops.trie_insert_funcs(trie, funcs)
         log.log_debug("Finalizing trie")
         trie_ops.finalize_trie(trie, funcs)

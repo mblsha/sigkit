@@ -1,20 +1,21 @@
-from . import signaturelibrary as sl
 from .signaturelibrary import (
-    MaskedByte,
-    Pattern,
     FunctionInfo,
     FunctionNode,
-    str_to_bytes,
+    TrieNode,
 )
 
+from . import signaturelibrary as sl
+from .test_trie_util import node, info, p, b, bb
 from . import trie_ops
+
 import pytest
 
 
 def test_function_info_new() -> None:
-    p = Pattern.from_str("??34")
-    f = FunctionInfo([p])
-    assert f.patterns == [p]
+    p1 = p("??34")
+    p2 = p("1234")
+    f = FunctionInfo([p1, p2])
+    assert f.patterns == [p1, p2]
 
 
 def test_function_node_new() -> None:
@@ -26,29 +27,30 @@ def test_function_node_new() -> None:
     assert f.is_bridge == False
 
 
-def b(s: str) -> MaskedByte:
-    return MaskedByte.from_str(s)
+def test_trie_node_eq() -> None:
+    t1 = TrieNode.new_trie()
+    t2 = TrieNode.new_trie()
+    assert t1 == t2
 
+    t1 = TrieNode(p("??34"), {}, None)
+    t2 = TrieNode(p("??34"), {}, None)
+    assert t1 == t2
 
-bb = str_to_bytes
+    t1 = TrieNode(p("??34"), {}, None)
+    t2 = TrieNode(p("1234"), {}, None)
+    assert t1 != t2
 
+    t1 = TrieNode(p("??34"), {b("11"): TrieNode.new_trie()}, None)
+    t2 = TrieNode(p("??34"), {b("11"): TrieNode.new_trie()}, None)
+    assert t1 == t2
 
-def p(s: str) -> Pattern:
-    return Pattern.from_str(s)
-
-
-def node(s: str, ref_count: int = 0) -> FunctionNode:
-    r = FunctionNode(s)
-    r.ref_count = ref_count
-    return r
-
-
-def info(s: str) -> FunctionInfo:
-    return FunctionInfo([Pattern.from_str(s)])
+    t1 = TrieNode(p("??34"), {b("11"): TrieNode.new_trie()}, None)
+    t2 = TrieNode(p("??34"), {b("22"): TrieNode.new_trie()}, None)
+    assert t1 != t2
 
 
 def test_trie_insert_single() -> None:
-    trie = sl.new_trie()
+    trie = TrieNode.new_trie()
     assert len(trie.children) == 0
 
     # pattern <MIN_PATTERN_LENGTH
@@ -83,7 +85,7 @@ def test_trie_insert_multiple() -> None:
         node("f3"): info("1122334455667788"),
     }
 
-    trie = sl.new_trie()
+    trie = TrieNode.new_trie()
     assert len(trie.children) == 0
 
     assert trie_ops.trie_insert_funcs(trie, funcs) == 3
@@ -113,7 +115,7 @@ def test_trie_insert_multiple() -> None:
         node("f2"): info("1122334455660088"),
     }
 
-    trie = sl.new_trie()
+    trie = TrieNode.new_trie()
     assert len(trie.children) == 0
 
     assert trie_ops.trie_insert_funcs(trie, funcs) == 2
@@ -147,7 +149,7 @@ def test_trie_find_wildcard() -> None:
         node("f3"): info("1122??445566778899"),
     }
 
-    trie = sl.new_trie()
+    trie = TrieNode.new_trie()
     assert trie_ops.trie_insert_funcs(trie, funcs) == 3
 
     assert trie.find(bb("112233445566778899")) == [
@@ -166,7 +168,7 @@ def test_trie_finalize() -> None:
         node("f3"): info("1122??445566778899"),
     }
 
-    trie = sl.new_trie()
+    trie = TrieNode.new_trie()
     assert trie_ops.trie_insert_funcs(trie, funcs) == 3
 
     trie_ops.finalize_trie(trie, funcs)

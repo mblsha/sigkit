@@ -187,7 +187,6 @@ class Pattern:
         assert len(data) == len(mask)
         for elem in mask:
             assert elem == 0 or elem == 1
-        # FIXME: is this array of MaskedByte?
         self._array = tuple(
             MaskedByte.new((data[i]), mask[i]) for i in range(len(data))
         )
@@ -297,7 +296,7 @@ class FunctionInfo:
 
 
 @dataclass
-class FunctionNode(object):
+class FunctionNode:
     """
     Represents a function that we would like to match and contains relevant metadata for matching purposes.
     Function nodes are connected with each other by a call graph. This helps not only encode information about
@@ -370,7 +369,8 @@ class FunctionNode(object):
         return result
 
 
-class TrieNode(object):
+@dataclass
+class TrieNode:
     """
     A prefix tree, aka a Trie.
     This trie has several special characteristics:
@@ -394,32 +394,35 @@ class TrieNode(object):
     In this case, there are six trie nodes (including the root), four function nodes, and `func2` is a bridge node.
     """
 
-    def __init__(
-        self,
-        pattern: Pattern,
-        children: Dict[MaskedByte, "TrieNode"],
-        value: Optional[List[FunctionNode]],
-    ):
+    pattern: Pattern
+    children: Dict[MaskedByte, "TrieNode"]
+    value: Optional[List[FunctionNode]]
+
+    @staticmethod
+    def new_trie() -> "TrieNode":
         """
-        Don't call me directly. Call new_trie() instead to construct an empty trie and use insert() to add to it.
-
-        :param pattern: Pattern object
-        :param children: forms a trie of TrieNode. dict of {MaskedByte: child node}.
-        :param value: array of FunctionNode present at this TrieNode
+        Constructs a new, empty signature trie.
+        :return: an empty trie
         """
-        assert isinstance(pattern, Pattern)
-        for elem in pattern:
-            assert isinstance(elem, MaskedByte)
+        return TrieNode(Pattern(b"", []), {}, None)
 
-        self.pattern = pattern
-        self.children = children
-        self.value = value
-
-    def __repr__(self) -> str:
-        result = str(self.pattern)
+    def _to_str(self, depth: int) -> str:
+        result = "<trie:"
+        result += str(self.pattern)
         if self.value is not None:
             result += ":" + str(self.value)
+        if len(self.children):
+            result += "\n"
+            for k in self.children:
+                c = self.children[k]
+                result += "  " * depth + f"{k}: {c._to_str(depth+1)}\n"
+            result += "  "*(depth-1) + ">"
+        else:
+            result += ">"
         return result
+
+    def __repr__(self) -> str:
+        return self._to_str(1)
 
     def find(self, buf: bytes) -> List[FunctionNode]:
         """
@@ -582,11 +585,3 @@ class TrieNode(object):
         for func_node in self.all_values():
             for func in visit(func_node, visited):
                 yield func
-
-
-def new_trie() -> TrieNode:
-    """
-    Constructs a new, empty signature trie.
-    :return: an empty trie
-    """
-    return TrieNode(Pattern(b"", []), {}, None)

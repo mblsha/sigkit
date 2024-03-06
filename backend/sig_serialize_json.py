@@ -25,7 +25,32 @@ JSON serialization / deserialization
 import json
 
 from .signaturelibrary import MaskedByte, Pattern, TrieNode, FunctionNode
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, NamedTuple, Generator, Iterable
+
+
+class FunctionNodeInfo(NamedTuple):
+    func_nodes: List[FunctionNode]
+    func_node_ids: Dict[Optional[FunctionNode], int]
+
+
+def get_func_nodes(values: Iterable[FunctionNode]) -> FunctionNodeInfo:
+    func_nodes: List[FunctionNode] = []
+    func_node_ids: Dict[Optional[FunctionNode], int] = {None: -1}
+
+    def visit(func_node: Optional[FunctionNode]) -> None:
+        if not func_node:
+            return
+        if func_node in func_node_ids:
+            return
+        func_node_ids[func_node] = len(func_nodes)
+        func_nodes.append(func_node)
+        for f in func_node.callees.values():
+            visit(f)
+
+    for f in values:
+        visit(f)
+
+    return FunctionNodeInfo(func_nodes, func_node_ids)
 
 
 def _serialize_func_node(
@@ -40,7 +65,6 @@ def _serialize_func_node(
             str(call_site): func_node_ids[callee]
             for call_site, callee in func_node.callees.items()
         },
-        "is_bridge": func_node.is_bridge,
     }
 
 
@@ -68,21 +92,7 @@ def serialize(sig_trie: TrieNode) -> Dict[str, Any]:
     :param sig_trie: `TrieNode` object
     :return: a python dictionary ready for serialization as JSON
     """
-    func_nodes: List[FunctionNode] = []
-    func_node_ids: Dict[Optional[FunctionNode], int] = {None: -1}
-
-    def visit(func_node: Optional[FunctionNode]) -> None:
-        if not func_node:
-            return
-        if func_node in func_node_ids:
-            return
-        func_node_ids[func_node] = len(func_nodes)
-        func_nodes.append(func_node)
-        for f in func_node.callees.values():
-            visit(f)
-
-    for f in sig_trie.all_values():
-        visit(f)
+    func_nodes, func_node_ids = get_func_nodes(sig_trie.all_values())
 
     return {
         "functions": [
@@ -105,22 +115,25 @@ def _deserialize_func_node(serialized: Dict[str, Any]) -> FunctionNode:
     func_node.source_binary = serialized["source_binary"]
     func_node.pattern = _deserialize_pattern(serialized["pattern"])
     func_node.pattern_offset = serialized["pattern_offset"]
-    # func_node.is_bridge = serialized['is_bridge']
     return func_node
 
 
 def _deserialize_trie_node(
     serialized: Dict[str, Any], funcs_arr: List[FunctionNode]
 ) -> TrieNode:
+    funcs = (
+        [funcs_arr[i] for i in serialized["functions"]]
+        if serialized["functions"]
+        else []
+    )
+
     return TrieNode(
         _deserialize_pattern(serialized["pattern"]),
         {
             MaskedByte.from_str(k): _deserialize_trie_node(v, funcs_arr)
             for k, v in serialized["children"].items()
         },
-        [funcs_arr[i] for i in serialized["functions"]]
-        if serialized["functions"]
-        else [],
+        funcs if len(funcs) > 0 else None,
     )
 
 
