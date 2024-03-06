@@ -27,25 +27,28 @@ compared to the native implementation, so matcher results will be of inferior
 quality.
 """
 
-from __future__ import print_function
+import sys
 
-from binaryninja import *
+from binaryninja import BinaryView, Function, MediumLevelILOperation
 
+from ..backend.signaturelibrary import TrieNode, FunctionNode
 from ..sigkit import compute_sig
+
+from typing import List, Dict, Optional
 
 
 class SignatureMatcher(object):
-    def __init__(self, sig_trie, bv):
+    def __init__(self, sig_trie: TrieNode, bv: BinaryView):
         self.sig_trie = sig_trie
         self.bv = bv
 
-        self._matches = {}
-        self._matches_inv = {}
-        self.results = {}
+        self._matches: Dict[Function, FunctionNode] = {}
+        self._matches_inv: Dict[FunctionNode, Function] = {}
+        self.results: Dict[Function, FunctionNode] = {}
 
         self._cur_match_debug = ""
 
-    def resolve_thunk(self, func, level=0):
+    def resolve_thunk(self, func: Function, level: int = 0) -> Function:
         if compute_sig.get_func_len(func) >= 8:
             # print('resolve_thunk: not modified')
             return func
@@ -80,7 +83,7 @@ class SignatureMatcher(object):
         print("* following thunk %s -> %s" % (func.name, thunk_dest.name))
         return self.resolve_thunk(thunk_dest, level + 1)
 
-    def on_match(self, func, func_node, level=0):
+    def on_match(self, func: Function, func_node: FunctionNode, level: int = 0) -> None:
         if func in self._matches:
             if self._matches[func] != func_node:
                 sys.stderr.write(
@@ -119,11 +122,11 @@ class SignatureMatcher(object):
         self._matches[func] = func_node
         self._matches_inv[func_node] = func
 
-    def compute_func_callees(self, func):
+    def compute_func_callees(self, func: Function) -> Dict[int, Function]:
         """
         Return a list of the names of symbols the function calls.
         """
-        callees = {}
+        callees: Dict[int, Function] = {}
         for ref in func.call_sites:
             callee_addrs = self.bv.get_callees(ref.address, ref.function, ref.arch)
             if len(callee_addrs) != 1:
@@ -137,7 +140,13 @@ class SignatureMatcher(object):
     # 2: bytes + disambiguation match, but callee count mismatch
     # 3: bytes + disambiguation match, but callees mismatch
     # 999: full match
-    def does_func_match(self, func, func_node, visited, level=0):
+    def does_func_match(
+        self,
+        func: Function,
+        func_node: FunctionNode,
+        visited: Dict[Function, FunctionNode],
+        level: int = 0,
+    ) -> int:
         if func_node and func_node.name == "GetGraphDebug":
             return 0
 
@@ -227,7 +236,7 @@ class SignatureMatcher(object):
         self.on_match(func, func_node, level)
         return 999
 
-    def process_func(self, func):
+    def process_func(self, func: Function) -> List[Function]:
         """
         Try to sig the given function.
         Return the list of signatures the function matched against
@@ -284,7 +293,7 @@ class SignatureMatcher(object):
             self.on_match(func, match)
             return results
 
-    def run(self):
+    def run(self) -> None:
         queue = self.bv.functions
         while True:  # silly fixedpoint worklist algorithm
             deferred = []

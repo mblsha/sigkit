@@ -41,8 +41,11 @@ import sigkit.sig_serialize_fb
 cpu_factor = int(math.ceil(math.sqrt(os.cpu_count())))  # type: ignore
 
 
+from typing import Dict, List
+
+
 # delete weird, useless funcs and truncate names
-def cleanup_info(func_info, maxlen=40):
+def cleanup_info(func_info, maxlen: int=40) -> None:  # type: ignore
     import re
 
     to_delete = set()
@@ -56,7 +59,7 @@ def cleanup_info(func_info, maxlen=40):
 
 
 # load all pickles into a single signature library
-def load_pkls(pkls):
+def load_pkls(pkls):  # type: ignore
     # rarely-used libgcc stuff
     pkl_blacklist = {
         "libcilkrts.pkl",
@@ -81,21 +84,21 @@ def load_pkls(pkls):
     return trie, func_info
 
 
-def combine_sig_libs(sig_lib1, sig_lib2):
+def combine_sig_libs(sig_lib1, sig_lib2):  # type: ignore
     sigkit.trie_ops.combine_signature_libraries(*sig_lib1, *sig_lib2)
     return sig_lib1
 
 
-def finalize_sig_lib(sig_lib):
+def finalize_sig_lib(sig_lib):  # type: ignore
     sigkit.trie_ops.finalize_trie(*sig_lib)
     return sig_lib
 
 
-def do_package(package):
+def do_package(package):  # type: ignore
     loop = asyncio.get_event_loop()
     pool = concurrent.futures.ProcessPoolExecutor(cpu_factor)
 
-    async def inner():
+    async def inner():  # type: ignore
         print("Processing", package)
         result_filename = os.path.join("sigs", package.replace("/", "-") + ".sig")
         if os.path.exists(result_filename):
@@ -106,7 +109,7 @@ def do_package(package):
         for pkg_version in os.listdir(package):
             pkg_version = os.path.join(package, pkg_version)
             pkls = Path(pkg_version).glob("**/*.pkl")
-            pkls = list(map(str, pkls))
+            pkls = list(map(str, pkls))  # type: ignore
             if not pkls:
                 continue
             # print('  ' + pkg_version, len(pkls))
@@ -117,7 +120,7 @@ def do_package(package):
 
         with tqdm.tqdm(total=len(pkl_groups), desc="generating tries") as pbar:
 
-            async def async_load(to_load):
+            async def async_load(to_load):  # type: ignore
                 result = await loop.run_in_executor(pool, load_pkls, to_load)
                 pbar.update(1)
                 pbar.refresh()
@@ -133,7 +136,7 @@ def do_package(package):
         # big brain parallel async binary merge
         with tqdm.tqdm(total=len(lib_versions) - 1, desc="merging") as pbar:
 
-            async def merge(sig_libs):
+            async def merge(sig_libs):  # type: ignore
                 assert len(sig_libs)
                 if len(sig_libs) == 1:
                     return sig_libs[0]
@@ -168,7 +171,7 @@ def do_package(package):
     loop.run_until_complete(inner())
 
 
-def main():
+def main() -> None:
     if not os.path.exists("sigs"):
         os.mkdir("sigs")
     elif not os.path.isdir("sigs"):
@@ -193,7 +196,7 @@ def main():
 
     pool = multiprocessing.pool.ThreadPool(cpu_factor)
 
-    def do_package_in_worker(package):
+    def do_package_in_worker(package):  # type: ignore
         subprocess.call(["python3", __file__, "-c", package])
 
     for _ in pool.imap_unordered(do_package_in_worker, tasks):

@@ -30,12 +30,18 @@ merge_multiple_versions.py or libc-scraper's merge_ubuntu.py.
 
 import time
 
-from binaryninja import *
+from binaryninja import (
+    BinaryView,
+    BinaryViewType,
+    PluginCommandContext,
+    PluginCommand,
+    AnalysisCompletionEvent,
+)
 
 from ..backend import signaturelibrary as sl
 from ..sigkit import generate_function_signature
 
-from typing import NamedTuple
+from typing import NamedTuple, Generator, Any, List
 
 
 class Result(NamedTuple):
@@ -43,7 +49,7 @@ class Result(NamedTuple):
     info: sl.FunctionInfo
 
 
-def process_bv(bv):
+def process_bv(bv: BinaryView) -> None:
     global results
     print(bv.file.filename, ": processing")
     guess_relocs = len(bv.relocation_ranges) == 0
@@ -62,23 +68,23 @@ def process_bv(bv):
     print(bv.file.filename, ": done")
 
 
-def on_analysis_complete(self):
+def on_analysis_complete(self: BinaryView) -> None:
     global wg
     process_bv(self.view)
     with wg.get_lock():
-        wg.value -= 1
+        wg.value -= 1  # type: ignore
     self.view.file.close()
 
 
-def process_binary(input_binary):
+def process_binary(input_binary: str) -> None:
     global wg
     print(input_binary, ": loading")
     if input_binary.endswith(".dll"):
-        bv = binaryninja.BinaryViewType["PE"].open(input_binary)
+        bv = BinaryViewType["PE"].open(input_binary)
         cxt = PluginCommandContext(bv)
         PluginCommand.get_valid_list(cxt)["PDB\\Load (BETA)"].execute(cxt)
     elif input_binary.endswith(".o"):
-        bv = binaryninja.BinaryViewType["ELF"].open(input_binary)
+        bv = BinaryViewType["ELF"].open(input_binary)
     else:
         raise ValueError("unsupported input file", input_binary)
     if not bv:
@@ -87,16 +93,16 @@ def process_binary(input_binary):
     AnalysisCompletionEvent(bv, on_analysis_complete)
     bv.update_analysis()
     with wg.get_lock():
-        wg.value += 1
+        wg.value += 1  # type: ignore
 
 
-def async_process(input_queue):
+def async_process(input_queue: List[str]) -> Generator[None, None, None]:
     for input_binary in input_queue:
         process_binary(input_binary)
         yield
 
 
-def init_child(wg_, results_):
+def init_child(wg_: Any, results_: mp.Queue[Result]) -> None:
     global wg, results
     wg, results = wg_, results_
 

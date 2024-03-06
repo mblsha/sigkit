@@ -35,16 +35,25 @@ import pickle, json
 import gc
 from pathlib import Path
 
-from ..backend import signaturelibrary, trie_ops, sig_serialize_json
+from ..backend import (
+    signaturelibrary,
+    trie_ops,
+    sig_serialize_json,
+    TrieNode,
+    FunctionInfo,
+    FunctionNode,
+)
 from ..sigkit import sigexplorer
 
+from typing import Tuple, Dict
 
-def func_count(trie):
+
+def func_count(trie: TrieNode) -> int:
     return len(set(trie.all_functions()))
 
 
 # Clean up the functions list, exclude some garbage functions, etc.
-def preprocess_funcs_list(func_info):
+def preprocess_funcs_list(func_info: Dict[FunctionNode, FunctionInfo]) -> None:
     import re
 
     to_delete = set()
@@ -57,7 +66,9 @@ def preprocess_funcs_list(func_info):
         del func_info[f]
 
 
-def load_pkls(path, glob):
+def load_pkls(
+    path: str, glob: str
+) -> Tuple[TrieNode, Dict[FunctionNode, FunctionInfo]]:
     pkls = list(map(str, Path(path).glob(glob)))
     trie, func_info = signaturelibrary.new_trie(), {}
     for pkl in pkls:

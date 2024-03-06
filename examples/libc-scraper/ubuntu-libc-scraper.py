@@ -37,9 +37,9 @@ packages = ["libc6-dev", "libgcc-8-dev", "libgcc-7-dev", "libgcc-6-dev", "libgcc
 session, sem = None, None
 
 
-async def must(f):
+async def must(f):  # type: ignore
     global session, sem
-    await sem.put(None)
+    await sem.put(None)  # type: ignore
     retries = 0
     while True:
         try:
@@ -54,17 +54,17 @@ async def must(f):
             print("Maximum retry count exceeded")
             sys.exit(1)
         await asyncio.sleep(1.0)
-    await sem.get()
+    await sem.get()  # type: ignore
     return r
 
 
-async def get_html(url):
+async def get_html(url: str):  # type: ignore
     async with (await must(lambda session: session.get(url))) as resp:
         sys.stderr.write("GET " + url + "\n")
         return BeautifulSoup(await resp.text(), features="html.parser")
 
 
-async def get_series():
+async def get_series():  # type: ignore
     series = set()
     soup = await get_html("https://launchpad.net/ubuntu/+series")
     for strong in soup.find_all("strong"):
@@ -73,7 +73,7 @@ async def get_series():
     return series
 
 
-async def get_archs(series):
+async def get_archs(series):  # type: ignore
     soup = await get_html("https://launchpad.net" + series + "/+builds")
     for select in soup.find_all("select", {"id": "arch_tag"}):
         for option in select.find_all("option"):
@@ -82,7 +82,7 @@ async def get_archs(series):
             yield series + "/" + option["value"]
 
 
-async def get_versions(arch, package):
+async def get_versions(arch, package):  # type: ignore
     soup = await get_html("https://launchpad.net" + arch + "/" + package)
     for tr in soup.find_all("tr"):
         if len(tr.find_all("td")) != 10:
@@ -90,14 +90,14 @@ async def get_versions(arch, package):
         yield tr.find_all("td")[9].find_all("a")[0]["href"]
 
 
-async def get_deb_link(version):
+async def get_deb_link(version):  # type: ignore
     soup = await get_html("https://launchpad.net" + version)
     for a in soup.find_all("a", {"class": "sprite"}):
         if a["href"].endswith(".deb"):
             return a["href"]
 
 
-async def download_deb(version, deb_url):
+async def download_deb(version, deb_url):  # type: ignore
     filename = urllib.parse.urlparse(deb_url).path
     filename = filename[filename.rindex("/") + 1 :]
     version = os.curdir + version
@@ -116,7 +116,7 @@ async def download_deb(version, deb_url):
     print("Downloaded", filename)
 
 
-async def process_version(version):
+async def process_version(version):  # type: ignore
     deb_link = await get_deb_link(version)
     if deb_link:
         await download_deb(version, deb_link)
@@ -124,7 +124,7 @@ async def process_version(version):
         print("No .deb for", version)
 
 
-async def process_arch(arch):
+async def process_arch(arch):  # type: ignore
     await asyncio.gather(
         *[
             asyncio.create_task(process_version(version))
@@ -134,13 +134,13 @@ async def process_arch(arch):
     )
 
 
-async def process_series(series):
+async def process_series(series):  # type: ignore
     await asyncio.gather(
         *[asyncio.create_task(process_arch(arch)) async for arch in get_archs(series)]
     )
 
 
-async def main():
+async def main():  # type: ignore
     global session
     async with aiohttp.ClientSession() as session:
         await asyncio.gather(
