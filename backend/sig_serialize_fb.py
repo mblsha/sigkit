@@ -45,7 +45,7 @@ class SignatureLibraryWriter(object):
     Serializes signature libraries to a compressed Flatbuffer format usable by Binary Ninja.
     """
 
-    def __init__(self, include_source: bool = False):
+    def __init__(self, include_source: bool = True):
         self.builder = flatbuffers.Builder(4096)
         self.func_node_ids: Dict[Optional[FunctionNode], int] = {None: -1}
         self._bytes_cache: Dict[bytes, FBSerialized] = {}
@@ -285,7 +285,7 @@ class SignatureLibraryReader(object):
         for i in range(serialized.FunctionsLength()):
             funcs.append(self.funcs[serialized.Functions(i)])
         pattern = self._deserialize_pattern(serialized.Pattern())
-        return TrieNode(pattern, children, funcs)
+        return TrieNode(pattern, children, funcs if len(funcs) > 0 else None)
 
     def deserialize(self, buf: bytes) -> TrieNode:
         """
@@ -302,7 +302,8 @@ class SignatureLibraryReader(object):
                 % (ord(buf[4:5]), SIG_FORMAT_VERSION)
             )
         buf = zlib.decompress(buf[5:])
-        serialized = FlatBufSignatureLibrary.GetRootAsSignatureLibrary(buf, 0)  # type: ignore
+        print(dir(FlatBufSignatureLibrary.SignatureLibrary))
+        serialized = FlatBufSignatureLibrary.SignatureLibrary.GetRootAsSignatureLibrary(buf, 0)
         funcs_serialized = []
         for i in range(serialized.FunctionsLength()):
             f = serialized.Functions(i)

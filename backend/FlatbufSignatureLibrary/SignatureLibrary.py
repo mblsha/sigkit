@@ -4,13 +4,11 @@
 
 import flatbuffers
 
-from typing import Type
-
 class SignatureLibrary(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsSignatureLibrary(cls: Type["SignatureLibrary"], buf: bytes, offset: int) -> "SignatureLibrary":
+    def GetRootAsSignatureLibrary(cls, buf, offset):  # type: ignore
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = SignatureLibrary()
         x.Init(buf, n + offset)
