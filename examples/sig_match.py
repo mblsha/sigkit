@@ -147,9 +147,6 @@ class SignatureMatcher(object):
         visited: Dict[Function, FunctionNode],
         level: int = 0,
     ) -> int:
-        if func_node and func_node.name == "GetGraphDebug":
-            return 0
-
         print(
             (" " * level) + "compare",
             "None" if not func else func.name,
@@ -293,23 +290,30 @@ class SignatureMatcher(object):
             self.on_match(func, match)
             return results
 
+    def run_pass(self, queue: List[Function]) -> List[Function]:
+        deferred = []
+        print("Start of pass %d functions remaining" % (len(queue)))
+
+        for func in queue:
+            if func in self._matches:
+                continue
+            if compute_sig.get_func_len(func) < 8:
+                continue
+            matches = self.process_func(func)
+            if len(matches) > 1:
+                deferred.append(func)
+
+        print("Pass complete, %d functions deferred" % (len(deferred),))
+        if len(queue) == len(deferred):
+            print("No changes. Quit.")
+            return []
+        return deferred
+
+
     def run(self) -> None:
         queue = self.bv.functions
         while True:  # silly fixedpoint worklist algorithm
-            deferred = []
-            print("Start of pass %d functions remaining" % (len(queue)))
-
-            for func in queue:
-                if func in self._matches:
-                    continue
-                if compute_sig.get_func_len(func) < 8:
-                    continue
-                matches = self.process_func(func)
-                if len(matches) > 1:
-                    deferred.append(func)
-
-            print("Pass complete, %d functions deferred" % (len(deferred),))
-            if len(queue) == len(deferred):
-                print("No changes. Quit.")
+            deferred = self.run_pass(queue)
+            if not deferred:
                 break
             queue = deferred
