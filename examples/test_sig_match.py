@@ -1,4 +1,4 @@
-from .sig_match import SignatureMatcher
+from .sig_match import SignatureMatcher, MatchResult
 
 from ..backend.signaturelibrary import (
     FunctionInfo,
@@ -223,7 +223,6 @@ def test_does_func_match() -> None:
         node("f1"): info("??2233445566778899"),
         node("f2"): info("11??33445566778899"),
         node("f3"): info("1122??445566778899"),
-
         node_f1_disambiguation1: info("1122??445566778899"),
         node_f1_disambiguation2: info("1122??445566778899"),
     }
@@ -237,52 +236,51 @@ def test_does_func_match() -> None:
     f2 = MockFunction(bv, "f2", bb("998877665544332211"))
     bv.add_function(f2)
 
-    def match(*args: Any) -> int:
+    def match(*args: Any) -> MatchResult:
         matcher = SignatureMatcher(trie, bv)
         return matcher.does_func_match(*args)
 
     # visited: Dict[MockFunction, FunctionNode] = {}
 
     # no funcion -> no match
-    assert match(None, node("f1", 1), {}) == 0
-    assert match(None, node("f1", 0), {}) == 0
-    assert match(None, None, {}) == 0
+    assert match(None, node("f1", 1), {}) == MatchResult.NO_MATCH
+    assert match(None, node("f1", 0), {}) == MatchResult.NO_MATCH
+    assert match(None, None, {}) == MatchResult.NO_MATCH
 
     # wildcard full match
-    assert match(f1, None, {}) == 999
+    assert match(f1, None, {}) == MatchResult.FULL_MATCH
 
     # f99 is a bridge node, they skip the trie check
-    assert match(f1, node("f99", 0), {}) == 999
+    assert match(f1, node("f99", 0), {}) == MatchResult.FULL_MATCH
 
     # full match
-    assert match(f1, node("f1", 1), {}) == 999
-    assert match(f1, node("f2", 1), {}) == 999
-    assert match(f1, node("f3", 1), {}) == 999
+    assert match(f1, node("f1", 1), {}) == MatchResult.FULL_MATCH
+    assert match(f1, node("f2", 1), {}) == MatchResult.FULL_MATCH
+    assert match(f1, node("f3", 1), {}) == MatchResult.FULL_MATCH
 
     # trie mismatch
-    assert match(f2, node("f1", 1), {}) == 0
-    assert match(f2, node("f2", 1), {}) == 0
-    assert match(f2, node("f3", 1), {}) == 0
+    assert match(f2, node("f1", 1), {}) == MatchResult.NO_MATCH
+    assert match(f2, node("f2", 1), {}) == MatchResult.NO_MATCH
+    assert match(f2, node("f3", 1), {}) == MatchResult.NO_MATCH
 
     # visited match
-    assert match(f2, node("f1", 1), {f2: node("f1", 1)}) == 999
+    assert match(f2, node("f1", 1), {f2: node("f1", 1)}) == MatchResult.FULL_MATCH
 
     # cached _matches influences the result
     if True:
         matcher = SignatureMatcher(trie, bv)
         matcher._matches[f2] = node("f1", 1)
-        assert matcher.does_func_match(f2, node("f1", 1), {}) == 999
+        assert matcher.does_func_match(f2, node("f1", 1), {}) == MatchResult.FULL_MATCH
 
         matcher._matches[f2] = node("f2", 1)
-        assert matcher.does_func_match(f2, node("f1", 1), {}) == 0
+        assert matcher.does_func_match(f2, node("f1", 1), {}) == MatchResult.NO_MATCH
 
     # disambiguation
-    assert match(f1, node_f1_disambiguation1, {}) == 1
-    assert match(f1, node_f1_disambiguation2, {}) == 999
+    assert match(f1, node_f1_disambiguation1, {}) == MatchResult.DISAMBIGUATION_MISMATCH
+    assert match(f1, node_f1_disambiguation2, {}) == MatchResult.FULL_MATCH
 
     # callees
     # TODO
-
 
 
 def test_signature_matcher() -> None:
@@ -301,4 +299,3 @@ def test_signature_matcher() -> None:
     matcher = SignatureMatcher(trie, bv)
     assert matcher.run_pass(bv.functions) == []
     assert len(matcher._matches) == 1
-

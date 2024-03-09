@@ -36,6 +36,16 @@ from ..sigkit import compute_sig
 
 from typing import List, Dict, Optional
 
+from enum import Enum
+
+
+class MatchResult(Enum):
+    NO_MATCH = 0
+    DISAMBIGUATION_MISMATCH = 1
+    CALL_SITES_MISMATCH = 2
+    CALLEE_MISMATCH = 3
+    FULL_MATCH = 999
+
 
 class SignatureMatcher(object):
     def __init__(self, sig_trie: TrieNode, bv: BinaryView):
@@ -50,10 +60,8 @@ class SignatureMatcher(object):
 
     def resolve_thunk(self, func: Function, level: int = 0) -> Function:
         if compute_sig.get_func_len(func) >= 8:
-            # print('resolve_thunk: not modified')
             return func
 
-        print("resolve_thunk...")
         first_insn = func.mlil[0]
         if first_insn.operation == MediumLevelILOperation.MLIL_TAILCALL:
             thunk_dest = self.bv.get_function_at(first_insn.dest.value.value)
@@ -146,22 +154,24 @@ class SignatureMatcher(object):
         func_node: FunctionNode,
         visited: Dict[Function, FunctionNode],
         level: int = 0,
-    ) -> int:
+    ) -> MatchResult:
         print(
             (" " * level) + "compare",
             "None" if not func else func.name,
             "vs",
             "*" if not func_node else func_node.name,
-            "from " + func_node.source_binary if func_node and func_node.source_binary else "",
+            "from " + func_node.source_binary
+            if func_node and func_node.source_binary
+            else "",
         )
 
         # we expect a function to be here but there isn't one. no match.
         if func is None:
-            return 0
+            return MatchResult.NO_MATCH
 
         # no information about this function. assume wildcard.
         if func_node is None:
-            return 999
+            return MatchResult.FULL_MATCH
 
         # fix for msvc thunks -.-
         thunk_dest = self.resolve_thunk(func)
@@ -169,7 +179,7 @@ class SignatureMatcher(object):
             sys.stderr.write(
                 "Warning: encountered a weird thunk %s, giving up\n" % (func.name,)
             )
-            return 0
+            return MatchResult.NO_MATCH
         func = thunk_dest
 
         # this is essentially a dfs on the callgraph. if we encounter a backedge,
@@ -179,12 +189,20 @@ class SignatureMatcher(object):
         # that b != c since we already assumed b == a (and c != a)
         if func in visited:
             print("we've already seen visited one before")
-            return 999 if visited[func] == func_node else 0
+            return (
+                MatchResult.FULL_MATCH
+                if visited[func] == func_node
+                else MatchResult.NO_MATCH
+            )
         visited[func] = func_node
 
         # if we've already figured out what this function is, don't waste our time doing it again.
         if func in self._matches:
-            return 999 if self._matches[func] == func_node else 0
+            return (
+                MatchResult.FULL_MATCH
+                if self._matches[func] == func_node
+                else MatchResult.NO_MATCH
+            )
 
         func_len = compute_sig.get_func_len(func)
         func_data = self.bv.read(func.start, func_len)
@@ -192,7 +210,7 @@ class SignatureMatcher(object):
             trie_matches = self.sig_trie.find(func_data)
             if func_node not in trie_matches:
                 print((" " * level) + "trie mismatch!")
-                return 0
+                return MatchResult.NO_MATCH
         else:
             print((" " * level) + "this is a bridge node.")
 
@@ -201,18 +219,18 @@ class SignatureMatcher(object):
         ]
         if not func_node.pattern.matches(disambiguation_data):
             print((" " * level) + "disambiguation mismatch!")
-            return 1
+            return MatchResult.DISAMBIGUATION_MISMATCH
 
         callees = self.compute_func_callees(func)
         # print('callees', callees, 'for', func, 'func_node', func_node)
         for call_site in callees:
             if call_site not in func_node.callees:
                 print((" " * level) + "call sites mismatch!")
-                return 2
+                return MatchResult.CALL_SITES_MISMATCH
         for call_site, callee in func_node.callees.items():
             if callee is not None and call_site not in callees:
                 print((" " * level) + "call sites mismatch!")
-                return 2
+                return MatchResult.CALL_SITES_MISMATCH
 
         for call_site in callees:
             # print('callees', callees, 'call_site', call_site, 'func_node', func_node, 'callees', func_node.callees)
@@ -220,7 +238,7 @@ class SignatureMatcher(object):
                 self.does_func_match(
                     callees[call_site], func_node.callees[call_site], visited, level + 1
                 )
-                != 999
+                != MatchResult.FULL_MATCH
             ):
                 print(
                     (" " * level)
@@ -228,11 +246,11 @@ class SignatureMatcher(object):
                     + func_node.callees[call_site].name
                     + " mismatch!"
                 )
-                return 3
+                return MatchResult.CALLEE_MISMATCH
 
         self._cur_match_debug = "full match"
         self.on_match(func, func_node, level)
-        return 999
+        return MatchResult.FULL_MATCH
 
     def process_func(self, func: Function) -> List[Function]:
         """
@@ -249,10 +267,10 @@ class SignatureMatcher(object):
         best_score, results = 0, []
         for candidate_func in trie_matches:
             score = self.does_func_match(func, candidate_func, {})
-            if score > best_score:
+            if score.value > best_score:
                 results = [candidate_func]
-                best_score = score
-            elif score == best_score:
+                best_score = score.value
+            elif score.value == best_score:
                 results.append(candidate_func)
 
         if len(results) == 0:
@@ -309,7 +327,6 @@ class SignatureMatcher(object):
             print("No changes. Quit.")
             return []
         return deferred
-
 
     def run(self) -> None:
         queue = self.bv.functions
