@@ -23,8 +23,9 @@ def test_function_node_new() -> None:
     assert str(f) == "<func:test:>"
     assert f.is_bridge == True
 
-    f.ref_count = 1
+    f = node("test", 1)
     assert f.is_bridge == False
+    assert f.ref_count == 1
 
 
 def test_trie_node_eq() -> None:
@@ -140,6 +141,11 @@ def test_trie_insert_multiple() -> None:
 
     assert trie.find(bb("1122334455667788")) == [node("f1", 1)]
     assert trie.find(bb("1122334455660088")) == [node("f2", 1)]
+
+
+def test_bridge_nodes() -> None:
+    # FIXME
+    pass
 
 
 def test_trie_find_wildcard() -> None:

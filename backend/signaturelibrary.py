@@ -378,10 +378,10 @@ class TrieNode:
      - Bytestrings can start with a wildcard.
      - Nodes contain an array of function nodes, which represent functions matched by the pattern corresponding to that trie position.
      - Most importantly, the function nodes are themselves connected by a call graph (a directed graph).
+
     This means that all of the function nodes are actually interconnected orthogonally from the trie itself.
     In fact, a trie node may contain a function node that has a call edge to a function node which itself is not contained within the trie!
-    In such cases, we refer to such nodes as "bridge" nodes, as they have no purpose for function matching other than
-    to link two related functions via the call graph.
+    In such cases, we refer to such nodes as "bridge" nodes, as they have no purpose for function matching other than to link two related functions via the call graph.
 
     Here is an example to illustrate:
     01

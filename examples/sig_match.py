@@ -152,15 +152,16 @@ class SignatureMatcher(object):
             "None" if not func else func.name,
             "vs",
             "*" if not func_node else func_node.name,
-            "from " + func_node.source_binary if func_node else "",
+            "from " + func_node.source_binary if func_node and func_node.source_binary else "",
         )
-        # no information about this function. assume wildcard.
-        if func_node is None:
-            return 999
 
         # we expect a function to be here but there isn't one. no match.
         if func is None:
             return 0
+
+        # no information about this function. assume wildcard.
+        if func_node is None:
+            return 999
 
         # fix for msvc thunks -.-
         thunk_dest = self.resolve_thunk(func)

@@ -17,17 +17,14 @@ from binaryninja import (
 )
 
 from unittest.mock import MagicMock, Mock, PropertyMock
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 
 class MockBasicBlock:
     def __init__(self, start: int, end: int) -> None:
         self.start = start
         self.end = end
-
-    @property
-    def has_invalid_instructions(self) -> bool:
-        return False
+        self.has_invalid_instructions = False
 
 
 def value_value(value: int) -> MagicMock:
@@ -49,29 +46,32 @@ class MockMLIL:
         self.dest = dest
 
 
+class MockCallSite:
+    def __init__(
+        self,
+        bv: "MockBinaryView",
+        address: int,
+        func: Optional["MockFunction"] = None,
+        arch: Optional[str] = None,
+    ) -> None:
+        self._view = bv
+        self.address = address
+        self.function = func
+        self.arch = arch
+
+
 class MockFunction:
     def __init__(self, view: "MockBinaryView", name: str, data: bytes) -> None:
-        self._view = view
-        self._name = name
+        self.view = view
+        self.name = name
         self._data = data
-        self._basic_blocks: List[MockBasicBlock] = []
+        self.basic_blocks: List[MockBasicBlock] = []
         self.mlil: List[MockMLIL] = []
-
-    @property
-    def view(self) -> "MockBinaryView":
-        return self._view
-
-    @property
-    def name(self) -> str:
-        return self._name
+        self.call_sites: List[MockCallSite] = []
 
     @property
     def start(self) -> int:
-        return self._basic_blocks[0].start
-
-    @property
-    def basic_blocks(self) -> list[MockBasicBlock]:
-        return self._basic_blocks
+        return self.basic_blocks[0].start
 
 
 class MockBinaryView:
@@ -79,13 +79,14 @@ class MockBinaryView:
         self._data = b""
         self._functions: List[MockFunction] = []
         self._functions_at: Dict[int, MockFunction] = {}
+        self._callees_at: Dict[int, List[int]] = {}
 
     def add_function(self, f: MockFunction) -> None:
         self._functions.append(f)
         start = len(self._data)
         self._data += f._data
         end = len(self._data)
-        f._basic_blocks.append(MockBasicBlock(start, end))
+        f.basic_blocks.append(MockBasicBlock(start, end))
         self._functions_at[start] = f
 
     @property
@@ -95,8 +96,13 @@ class MockBinaryView:
     def get_function_at(self, addr: int) -> Optional[MockFunction]:
         return self._functions_at.get(addr)
 
+    def get_callees(
+        self, addr: int, func: Optional[MockFunction], arch: Optional[str]
+    ) -> List[int]:
+        return self._callees_at[addr]
+
     def read(self, addr: int, length: int) -> bytes:
-        return b"\x00" * length
+        return self._data[addr : addr + length]
 
     @property
     def end(self) -> int:
@@ -108,8 +114,7 @@ def test_resolve_thunk_not_thunk() -> None:
     f1 = MockFunction(bv, "f1", bb("1122334455667788"))
     bv.add_function(f1)
 
-    trie = TrieNode.new_trie()
-    matcher = SignatureMatcher(trie, bv)
+    matcher = SignatureMatcher(TrieNode.new_trie(), bv)
 
     assert matcher.resolve_thunk(f1) == f1
     assert get_func_len(f1) == len(f1._data)
@@ -121,20 +126,18 @@ def test_resolve_thunk_tailcall_recursion() -> None:
     f1.mlil = [MockMLIL(MediumLevelILOperation.MLIL_TAILCALL, dest=value_value(0))]
     bv.add_function(f1)
 
-    trie = TrieNode.new_trie()
-    matcher = SignatureMatcher(trie, bv)
+    matcher = SignatureMatcher(TrieNode.new_trie(), bv)
 
     assert matcher.resolve_thunk(f1) == None
+
 
 def test_resolve_thunk_tailcall_to_unknown() -> None:
     bv = MockBinaryView()
     f1 = MockFunction(bv, "f1", bb("11223344"))
-    f1.mlil = [MockMLIL(MediumLevelILOperation.MLIL_TAILCALL,
-                        dest=value_value(1000))]
+    f1.mlil = [MockMLIL(MediumLevelILOperation.MLIL_TAILCALL, dest=value_value(1000))]
     bv.add_function(f1)
 
-    trie = TrieNode.new_trie()
-    matcher = SignatureMatcher(trie, bv)
+    matcher = SignatureMatcher(TrieNode.new_trie(), bv)
 
     assert matcher.resolve_thunk(f1) == None
 
@@ -150,17 +153,136 @@ def test_resolve_thunk_tailcall() -> None:
     assert get_func_len(f1) == len(f1._data)
 
     f2 = MockFunction(bv, "f2", bb("11223344"))
-    f2.mlil = [
-        MockMLIL(MediumLevelILOperation.MLIL_CONST_PTR, dest=value_value(0))
-    ]
+    f2.mlil = [MockMLIL(MediumLevelILOperation.MLIL_CONST_PTR, dest=value_value(0))]
     bv.add_function(f2)
     assert get_bb_len(f2.basic_blocks[0]) == len(f2._data)
     assert get_func_len(f2) == len(f2._data)
 
-    trie = TrieNode.new_trie()
-    matcher = SignatureMatcher(trie, bv)
+    matcher = SignatureMatcher(TrieNode.new_trie(), bv)
 
     assert matcher.resolve_thunk(f1) == f2
+
+
+def test_resolve_thunk_jump() -> None:
+    # FIXME
+    pass
+
+
+def test_on_match() -> None:
+    funcs = {
+        node("f1"): info("??2233445566778899"),
+        node("f2"): info("11??33445566778899"),
+        node("f3"): info("1122??445566778899"),
+    }
+
+    trie = TrieNode.new_trie()
+    assert trie_ops.trie_insert_funcs(trie, funcs) == 3
+
+    bv = MockBinaryView()
+    f1 = MockFunction(bv, "f1", bb("112233445566778899"))
+    bv.add_function(f1)
+
+    matcher = SignatureMatcher(trie, bv)
+
+    matcher.on_match(f1, node("f1"))
+    assert matcher.results == {f1: node("f1")}
+
+    # conflict
+    matcher.on_match(f1, node("f2"))
+    assert matcher.results == {}
+
+    matcher.on_match(f1, node("f1"))
+    assert matcher.results == {}
+
+    matcher.on_match(f1, node("f2"))
+    assert matcher.results == {}
+
+    # reset matcher, try with another wildcard
+    matcher = SignatureMatcher(trie, bv)
+    matcher.on_match(f1, node("f2"))
+    assert matcher.results == {f1: node("f2")}
+
+
+def test_compute_func_callees() -> None:
+    bv = MockBinaryView()
+    f1 = MockFunction(bv, "f1", bb("112233445566778899"))
+    bv.add_function(f1)
+
+    matcher = SignatureMatcher(TrieNode.new_trie(), bv)
+    assert matcher.compute_func_callees(f1) == {}
+
+    f1.call_sites.append(MockCallSite(bv, 1000, f1))
+    bv._callees_at[1000] = [f1.start]
+    assert matcher.compute_func_callees(f1) == {1000: f1}
+
+
+def test_does_func_match() -> None:
+    node_f1_disambiguation1 = node("f1d", 1, p("9922"), 0)
+    node_f1_disambiguation2 = node("f1d", 1, p("1122"), 0)
+    funcs = {
+        node("f1"): info("??2233445566778899"),
+        node("f2"): info("11??33445566778899"),
+        node("f3"): info("1122??445566778899"),
+
+        node_f1_disambiguation1: info("1122??445566778899"),
+        node_f1_disambiguation2: info("1122??445566778899"),
+    }
+
+    trie = TrieNode.new_trie()
+    assert trie_ops.trie_insert_funcs(trie, funcs) == 5
+
+    bv = MockBinaryView()
+    f1 = MockFunction(bv, "f1", bb("112233445566778899"))
+    bv.add_function(f1)
+    f2 = MockFunction(bv, "f2", bb("998877665544332211"))
+    bv.add_function(f2)
+
+    def match(*args: Any) -> int:
+        matcher = SignatureMatcher(trie, bv)
+        return matcher.does_func_match(*args)
+
+    # visited: Dict[MockFunction, FunctionNode] = {}
+
+    # no funcion -> no match
+    assert match(None, node("f1", 1), {}) == 0
+    assert match(None, node("f1", 0), {}) == 0
+    assert match(None, None, {}) == 0
+
+    # wildcard full match
+    assert match(f1, None, {}) == 999
+
+    # f99 is a bridge node, they skip the trie check
+    assert match(f1, node("f99", 0), {}) == 999
+
+    # full match
+    assert match(f1, node("f1", 1), {}) == 999
+    assert match(f1, node("f2", 1), {}) == 999
+    assert match(f1, node("f3", 1), {}) == 999
+
+    # trie mismatch
+    assert match(f2, node("f1", 1), {}) == 0
+    assert match(f2, node("f2", 1), {}) == 0
+    assert match(f2, node("f3", 1), {}) == 0
+
+    # visited match
+    assert match(f2, node("f1", 1), {f2: node("f1", 1)}) == 999
+
+    # cached _matches influences the result
+    if True:
+        matcher = SignatureMatcher(trie, bv)
+        matcher._matches[f2] = node("f1", 1)
+        assert matcher.does_func_match(f2, node("f1", 1), {}) == 999
+
+        matcher._matches[f2] = node("f2", 1)
+        assert matcher.does_func_match(f2, node("f1", 1), {}) == 0
+
+    # disambiguation
+    assert match(f1, node_f1_disambiguation1, {}) == 1
+    assert match(f1, node_f1_disambiguation2, {}) == 999
+
+    # callees
+    # TODO
+
 
 
 def test_signature_matcher() -> None:
@@ -178,4 +300,5 @@ def test_signature_matcher() -> None:
 
     matcher = SignatureMatcher(trie, bv)
     assert matcher.run_pass(bv.functions) == []
-    assert len(matcher._matches) == 0
+    assert len(matcher._matches) == 1
+
