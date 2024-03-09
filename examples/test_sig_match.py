@@ -17,7 +17,7 @@ from binaryninja import (
 )
 
 from unittest.mock import MagicMock, Mock, PropertyMock
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 
 
 class MockBasicBlock:
@@ -184,22 +184,23 @@ def test_on_match() -> None:
 
     matcher = SignatureMatcher(trie, bv)
 
-    matcher.on_match(f1, node("f1"))
+    assert matcher.on_match(f1, node("f1")) == None
     assert matcher.results == {f1: node("f1")}
 
     # conflict
-    matcher.on_match(f1, node("f2"))
+    assert matcher.on_match(f1, node("f2")) == MatchError.MATCH_CONFLICT
     assert matcher.results == {}
 
-    matcher.on_match(f1, node("f1"))
+    assert matcher.on_match(f1, node("f1")) == MatchError.MATCH_ALREADY_MATCHED
     assert matcher.results == {}
 
-    matcher.on_match(f1, node("f2"))
+    assert matcher.on_match(f1, node("f2")) == MatchError.MATCH_CONFLICT
     assert matcher.results == {}
 
     # reset matcher, try with another wildcard
     matcher = SignatureMatcher(trie, bv)
-    matcher.on_match(f1, node("f2"))
+    assert matcher.on_match(f1, node("f2")) == None
+
     assert matcher.results == {f1: node("f2")}
 
 
@@ -236,46 +237,79 @@ def test_does_func_match() -> None:
     f2 = MockFunction(bv, "f2", bb("998877665544332211"))
     bv.add_function(f2)
 
-    def match(*args: Any) -> MatchResult:
+    def match(*args: Any) -> Tuple[MatchResult, Optional[MatchError]]:
         matcher = SignatureMatcher(trie, bv)
         return matcher.does_func_match(*args)
 
     # no funcion -> no match
-    assert match(None, node("f1", 1), {}) == MatchResult.NO_MATCH
-    assert match(None, node("f1", 0), {}) == MatchResult.NO_MATCH
-    assert match(None, None, {}) == MatchResult.NO_MATCH
+    assert match(None, node("f1", 1), {}) == (
+        MatchResult.NO_MATCH,
+        MatchError.MATCH_FUNC_IS_NONE,
+    )
+    assert match(None, node("f1", 0), {}) == (
+        MatchResult.NO_MATCH,
+        MatchError.MATCH_FUNC_IS_NONE,
+    )
+    assert match(None, None, {}) == (
+        MatchResult.NO_MATCH,
+        MatchError.MATCH_FUNC_IS_NONE,
+    )
 
     # wildcard full match
-    assert match(f1, None, {}) == MatchResult.FULL_MATCH
+    assert match(f1, None, {}) == (
+        MatchResult.FULL_MATCH,
+        MatchError.MATCH_FUNC_NODE_IS_NONE,
+    )
 
     # f99 is a bridge node, they skip the trie check
-    assert match(f1, node("f99", 0), {}) == MatchResult.FULL_MATCH
+    assert match(f1, node("f99", 0), {}) == (MatchResult.FULL_MATCH, None)
 
     # full match
-    assert match(f1, node("f1", 1), {}) == MatchResult.FULL_MATCH
-    assert match(f1, node("f2", 1), {}) == MatchResult.FULL_MATCH
-    assert match(f1, node("f3", 1), {}) == MatchResult.FULL_MATCH
+    assert match(f1, node("f1", 1), {}) == (MatchResult.FULL_MATCH, None)
+    assert match(f1, node("f2", 1), {}) == (MatchResult.FULL_MATCH, None)
+    assert match(f1, node("f3", 1), {}) == (MatchResult.FULL_MATCH, None)
 
     # trie mismatch
-    assert match(f2, node("f1", 1), {}) == MatchResult.NO_MATCH
-    assert match(f2, node("f2", 1), {}) == MatchResult.NO_MATCH
-    assert match(f2, node("f3", 1), {}) == MatchResult.NO_MATCH
+    assert match(f2, node("f1", 1), {}) == (
+        MatchResult.NO_MATCH,
+        MatchError.MATCH_TRIE_MISMATCH,
+    )
+    assert match(f2, node("f2", 1), {}) == (
+        MatchResult.NO_MATCH,
+        MatchError.MATCH_TRIE_MISMATCH,
+    )
+    assert match(f2, node("f3", 1), {}) == (
+        MatchResult.NO_MATCH,
+        MatchError.MATCH_TRIE_MISMATCH,
+    )
 
     # visited match
-    assert match(f2, node("f1", 1), {f2: node("f1", 1)}) == MatchResult.FULL_MATCH
+    assert match(f2, node("f1", 1), {f2: node("f1", 1)}) == (
+        MatchResult.FULL_MATCH,
+        MatchError.MATCH_ALREADY_VISITED,
+    )
 
     # cached _matches influences the result
     if True:
         matcher = SignatureMatcher(trie, bv)
         matcher._matches[f2] = node("f1", 1)
-        assert matcher.does_func_match(f2, node("f1", 1), {}) == MatchResult.FULL_MATCH
+        assert matcher.does_func_match(f2, node("f1", 1), {}) == (
+            MatchResult.FULL_MATCH,
+            MatchError.MATCH_ALREADY_MATCHED,
+        )
 
         matcher._matches[f2] = node("f2", 1)
-        assert matcher.does_func_match(f2, node("f1", 1), {}) == MatchResult.NO_MATCH
+        assert matcher.does_func_match(f2, node("f1", 1), {}) == (
+            MatchResult.NO_MATCH,
+            MatchError.MATCH_ALREADY_MATCHED,
+        )
 
     # disambiguation
-    assert match(f1, node_f1_disambiguation1, {}) == MatchResult.DISAMBIGUATION_MISMATCH
-    assert match(f1, node_f1_disambiguation2, {}) == MatchResult.FULL_MATCH
+    assert match(f1, node_f1_disambiguation1, {}) == (
+        MatchResult.DISAMBIGUATION_MISMATCH,
+        MatchError.MATCH_DISAMBIGUATION_MISMATCH,
+    )
+    assert match(f1, node_f1_disambiguation2, {}) == (MatchResult.FULL_MATCH, None)
 
     # callees
     # TODO

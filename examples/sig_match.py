@@ -52,6 +52,19 @@ class MatchError(Enum):
     THUNK_JUMP_SRC = 2
     THUNK_DEST_NOT_FOUND = 3
 
+    MATCH_FUNC_IS_NONE = 4
+    MATCH_FUNC_NODE_IS_NONE = 5
+    MATCH_ALREADY_VISITED = 6
+    MATCH_ALREADY_MATCHED = 7
+    MATCH_INVERSE_ALREADY_MATCHED = 8
+    MATCH_TRIE_MISMATCH = 9
+    MATCH_DISAMBIGUATION_MISMATCH = 10
+    MATCH_CALL_SITE_NOT_IN_FUNC_NODE_CALLEES = 11
+    MATCH_CALL_SITE_NOT_IN_FUNC_CALLEES = 12
+    MATCH_CALLEE_MISMATCH = 13
+    MATCH_CONFLICT = 14
+    MATCH_INVERSE_CONFLICT = 15
+
 
 class SignatureMatcher(object):
     def __init__(self, sig_trie: TrieNode, bv: BinaryView):
@@ -94,44 +107,27 @@ class SignatureMatcher(object):
 
         return self.resolve_thunk(thunk_dest, level + 1)
 
-    def on_match(self, func: Function, func_node: FunctionNode, level: int = 0) -> None:
+    def on_match(self, func: Function, func_node: FunctionNode) -> Optional[MatchError]:
+        result: Optional[MatchError] = None
         if func in self._matches:
+            result = MatchError.MATCH_ALREADY_MATCHED
             if self._matches[func] != func_node:
-                sys.stderr.write(
-                    "Warning: CONFLICT on %s: %s vs %s"
-                    % (func.name, self._matches[func], func_node)
-                    + "\n"
-                )
+                result = MatchError.MATCH_CONFLICT
                 if func in self.results:
                     del self.results[func]
-            return
+            return result
 
         self.results[func] = func_node
 
         if func_node in self._matches_inv:
+            result = MatchError.MATCH_INVERSE_ALREADY_MATCHED
             if self._matches_inv[func_node] != func:
-                sys.stderr.write(
-                    "Warning: INVERSE CONFLICT (%s) on %s: %s vs %s"
-                    % (
-                        self._cur_match_debug,
-                        func_node,
-                        self._matches_inv[func_node].name,
-                        func.name,
-                    )
-                    + "\n"
-                )
-            return
+                result = MatchError.MATCH_INVERSE_CONFLICT
+            return result
 
-        print(
-            (" " * level) + func.name,
-            "=>",
-            func_node.name,
-            "from",
-            func_node.source_binary,
-            "(" + self._cur_match_debug + ")",
-        )
         self._matches[func] = func_node
         self._matches_inv[func_node] = func
+        return result
 
     def compute_func_callees(self, func: Function) -> Dict[int, Function]:
         """
@@ -145,44 +141,25 @@ class SignatureMatcher(object):
             callees[ref.address - func.start] = self.bv.get_function_at(callee_addrs[0])
         return callees
 
-    # return value: score, more == better
-    # 0: no match
-    # 1: bytes match, but disambiguation mismatch
-    # 2: bytes + disambiguation match, but callee count mismatch
-    # 3: bytes + disambiguation match, but callees mismatch
-    # 999: full match
     def does_func_match(
         self,
         func: Function,
         func_node: FunctionNode,
         visited: Dict[Function, FunctionNode],
         level: int = 0,
-    ) -> MatchResult:
-        print(
-            (" " * level) + "compare",
-            "None" if not func else func.name,
-            "vs",
-            "*" if not func_node else func_node.name,
-            "from " + func_node.source_binary
-            if func_node and func_node.source_binary
-            else "",
-        )
-
+    ) -> Tuple[MatchResult, Optional[MatchError]]:
         # we expect a function to be here but there isn't one. no match.
         if func is None:
-            return MatchResult.NO_MATCH
+            return MatchResult.NO_MATCH, MatchError.MATCH_FUNC_IS_NONE
 
         # no information about this function. assume wildcard.
         if func_node is None:
-            return MatchResult.FULL_MATCH
+            return MatchResult.FULL_MATCH, MatchError.MATCH_FUNC_NODE_IS_NONE
 
         # fix for msvc thunks -.-
         thunk_dest, thunk_error = self.resolve_thunk(func)
         if not thunk_dest:
-            sys.stderr.write(
-                "Warning: encountered a weird thunk %s, giving up\n" % (func.name,)
-            )
-            return MatchResult.NO_MATCH
+            return MatchResult.NO_MATCH, thunk_error
         func = thunk_dest
 
         # this is essentially a dfs on the callgraph. if we encounter a backedge,
@@ -191,12 +168,11 @@ class SignatureMatcher(object):
         # optimistically assumed b == a, then later on if we compare b and c, we say
         # that b != c since we already assumed b == a (and c != a)
         if func in visited:
-            print("we've already seen visited one before")
             return (
                 MatchResult.FULL_MATCH
                 if visited[func] == func_node
                 else MatchResult.NO_MATCH
-            )
+            ), MatchError.MATCH_ALREADY_VISITED
         visited[func] = func_node
 
         # if we've already figured out what this function is, don't waste our time doing it again.
@@ -205,68 +181,62 @@ class SignatureMatcher(object):
                 MatchResult.FULL_MATCH
                 if self._matches[func] == func_node
                 else MatchResult.NO_MATCH
-            )
+            ), MatchError.MATCH_ALREADY_MATCHED
 
         func_len = compute_sig.get_func_len(func)
         func_data = self.bv.read(func.start, func_len)
         if not func_node.is_bridge:
             trie_matches = self.sig_trie.find(func_data)
             if func_node not in trie_matches:
-                print((" " * level) + "trie mismatch!")
-                return MatchResult.NO_MATCH
-        else:
-            print((" " * level) + "this is a bridge node.")
+                return MatchResult.NO_MATCH, MatchError.MATCH_TRIE_MISMATCH
 
         disambiguation_data = func_data[
             func_node.pattern_offset : func_node.pattern_offset + len(func_node.pattern)
         ]
         if not func_node.pattern.matches(disambiguation_data):
-            print((" " * level) + "disambiguation mismatch!")
-            return MatchResult.DISAMBIGUATION_MISMATCH
+            return (
+                MatchResult.DISAMBIGUATION_MISMATCH,
+                MatchError.MATCH_DISAMBIGUATION_MISMATCH,
+            )
 
         callees = self.compute_func_callees(func)
-        # print('callees', callees, 'for', func, 'func_node', func_node)
         for call_site in callees:
             if call_site not in func_node.callees:
-                return MatchResult.CALL_SITES_MISMATCH
+                return (
+                    MatchResult.CALL_SITES_MISMATCH,
+                    MatchError.MATCH_CALL_SITE_NOT_IN_FUNC_NODE_CALLEES,
+                )
         for call_site, callee in func_node.callees.items():
             if callee is not None and call_site not in callees:
-                return MatchResult.CALL_SITES_MISMATCH
+                return (
+                    MatchResult.CALL_SITES_MISMATCH,
+                    MatchError.MATCH_CALL_SITE_NOT_IN_FUNC_CALLEES,
+                )
 
         for call_site in callees:
-            # print('callees', callees, 'call_site', call_site, 'func_node', func_node, 'callees', func_node.callees)
             if (
                 self.does_func_match(
                     callees[call_site], func_node.callees[call_site], visited, level + 1
-                )
+                )[0]
                 != MatchResult.FULL_MATCH
             ):
-                print(
-                    (" " * level)
-                    + "callee "
-                    + func_node.callees[call_site].name
-                    + " mismatch!"
-                )
-                return MatchResult.CALLEE_MISMATCH
+                return MatchResult.CALLEE_MISMATCH, MatchError.MATCH_CALLEE_MISMATCH
 
-        self.on_match(func, func_node, level)
-        return MatchResult.FULL_MATCH
+        self.on_match(func, func_node)
+        return MatchResult.FULL_MATCH, None
 
     def process_func(self, func: Function) -> List[Function]:
         """
         Try to sig the given function.
         Return the list of signatures the function matched against
         """
-        # if func.name != 'PutDrawEnv':
-        #     return []
         func_len = compute_sig.get_func_len(func)
         func_data = self.bv.read(func.start, func_len)
         trie_matches = self.sig_trie.find(func_data)
-        # print('>> trie_matches', trie_matches)
 
         best_score, results = MatchResult.NO_MATCH, []
         for candidate_func in trie_matches:
-            score = self.does_func_match(func, candidate_func, {})
+            score, error = self.does_func_match(func, candidate_func, {})
             if score.value > best_score.value:
                 results = [candidate_func]
                 best_score = score
@@ -274,13 +244,6 @@ class SignatureMatcher(object):
                 results.append(candidate_func)
 
         if len(results) == 0:
-            for x in self.sig_trie.all_values():
-                if x.name == func.name:
-                    print(func.name, "=>", "no match", end=", ")
-                    print("but there was a signature from", x)
-            #         break
-            # else:
-            #     print('but this is OK.')
             assert best_score == MatchResult.NO_MATCH
             return results
         elif len(results) > 1:
