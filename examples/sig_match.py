@@ -34,7 +34,7 @@ from binaryninja import BinaryView, Function, MediumLevelILOperation
 from ..backend.signaturelibrary import TrieNode, FunctionNode
 from ..sigkit import compute_sig
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 
 from enum import Enum
 
@@ -45,6 +45,12 @@ class MatchResult(Enum):
     CALL_SITES_MISMATCH = 2
     CALLEE_MISMATCH = 3
     FULL_MATCH = 999
+
+
+class MatchError(Enum):
+    THUNK_RECURSION_LIMIT = 1
+    THUNK_JUMP_SRC = 2
+    THUNK_DEST_NOT_FOUND = 3
 
 
 class SignatureMatcher(object):
@@ -58,9 +64,11 @@ class SignatureMatcher(object):
 
         self._cur_match_debug = ""
 
-    def resolve_thunk(self, func: Function, level: int = 0) -> Function:
+    def resolve_thunk(
+        self, func: Function, level: int = 0
+    ) -> Tuple[Function, Optional[MatchError]]:
         if compute_sig.get_func_len(func) >= 8:
-            return func
+            return func, None
 
         first_insn = func.mlil[0]
         if first_insn.operation == MediumLevelILOperation.MLIL_TAILCALL:
@@ -72,23 +80,18 @@ class SignatureMatcher(object):
         ):
             data_var = self.bv.get_data_var_at(first_insn.dest.src.value.value)
             if not data_var or not data_var.data_refs_from:
-                return None
+                return None, MatchError.THUNK_JUMP_SRC
             thunk_dest = self.bv.get_function_at(data_var.data_refs_from[0])
         else:
-            return func
+            return func, None
 
         if thunk_dest is None:
-            return None
+            return None, MatchError.THUNK_DEST_NOT_FOUND
 
         if level >= 100:
             # something is wrong here. there's a weird infinite loop of thunks.
-            sys.stderr.write(
-                "Warning: reached recursion limit while trying to resolve thunk %s!\n"
-                % (func.name,)
-            )
-            return None
+            return None, MatchError.THUNK_RECURSION_LIMIT
 
-        print("* following thunk %s -> %s" % (func.name, thunk_dest.name))
         return self.resolve_thunk(thunk_dest, level + 1)
 
     def on_match(self, func: Function, func_node: FunctionNode, level: int = 0) -> None:
@@ -174,7 +177,7 @@ class SignatureMatcher(object):
             return MatchResult.FULL_MATCH
 
         # fix for msvc thunks -.-
-        thunk_dest = self.resolve_thunk(func)
+        thunk_dest, thunk_error = self.resolve_thunk(func)
         if not thunk_dest:
             sys.stderr.write(
                 "Warning: encountered a weird thunk %s, giving up\n" % (func.name,)
@@ -225,11 +228,9 @@ class SignatureMatcher(object):
         # print('callees', callees, 'for', func, 'func_node', func_node)
         for call_site in callees:
             if call_site not in func_node.callees:
-                print((" " * level) + "call sites mismatch!")
                 return MatchResult.CALL_SITES_MISMATCH
         for call_site, callee in func_node.callees.items():
             if callee is not None and call_site not in callees:
-                print((" " * level) + "call sites mismatch!")
                 return MatchResult.CALL_SITES_MISMATCH
 
         for call_site in callees:
@@ -248,7 +249,6 @@ class SignatureMatcher(object):
                 )
                 return MatchResult.CALLEE_MISMATCH
 
-        self._cur_match_debug = "full match"
         self.on_match(func, func_node, level)
         return MatchResult.FULL_MATCH
 
@@ -264,13 +264,13 @@ class SignatureMatcher(object):
         trie_matches = self.sig_trie.find(func_data)
         # print('>> trie_matches', trie_matches)
 
-        best_score, results = 0, []
+        best_score, results = MatchResult.NO_MATCH, []
         for candidate_func in trie_matches:
             score = self.does_func_match(func, candidate_func, {})
-            if score.value > best_score:
+            if score.value > best_score.value:
                 results = [candidate_func]
-                best_score = score.value
-            elif score.value == best_score:
+                best_score = score
+            elif score == best_score:
                 results.append(candidate_func)
 
         if len(results) == 0:
@@ -281,33 +281,16 @@ class SignatureMatcher(object):
             #         break
             # else:
             #     print('but this is OK.')
-            assert best_score == 0
+            assert best_score == MatchResult.NO_MATCH
             return results
         elif len(results) > 1:
             print(func.name, "=>", "deferred at level", best_score, results)
             return results
 
         match = results[0]
-        if best_score == 1:
-            self._cur_match_debug = "bytes match (but disambiguation mismatch?)"
-            self.on_match(func, match)
-            return results
-        elif best_score == 2:
-            self._cur_match_debug = (
-                "bytes + disambiguation match (but callee count mismatch)"
-            )
-            self.on_match(func, match)
-            return results
-        elif best_score == 3:
-            self._cur_match_debug = (
-                "bytes + disambiguation match (but callees mismatch)"
-            )
-            self.on_match(func, match)
-            return results
-        else:
-            self._cur_match_debug = "full match"
-            self.on_match(func, match)
-            return results
+        self._cur_match_debug = str(best_score)
+        self.on_match(func, match)
+        return results
 
     def run_pass(self, queue: List[Function]) -> List[Function]:
         deferred = []

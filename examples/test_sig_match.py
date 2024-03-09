@@ -1,4 +1,4 @@
-from .sig_match import SignatureMatcher, MatchResult
+from .sig_match import SignatureMatcher, MatchResult, MatchError
 
 from ..backend.signaturelibrary import (
     FunctionInfo,
@@ -116,7 +116,7 @@ def test_resolve_thunk_not_thunk() -> None:
 
     matcher = SignatureMatcher(TrieNode.new_trie(), bv)
 
-    assert matcher.resolve_thunk(f1) == f1
+    assert matcher.resolve_thunk(f1) == (f1, None)
     assert get_func_len(f1) == len(f1._data)
 
 
@@ -128,7 +128,7 @@ def test_resolve_thunk_tailcall_recursion() -> None:
 
     matcher = SignatureMatcher(TrieNode.new_trie(), bv)
 
-    assert matcher.resolve_thunk(f1) == None
+    assert matcher.resolve_thunk(f1) == (None, MatchError.THUNK_RECURSION_LIMIT)
 
 
 def test_resolve_thunk_tailcall_to_unknown() -> None:
@@ -139,7 +139,7 @@ def test_resolve_thunk_tailcall_to_unknown() -> None:
 
     matcher = SignatureMatcher(TrieNode.new_trie(), bv)
 
-    assert matcher.resolve_thunk(f1) == None
+    assert matcher.resolve_thunk(f1) == (None, MatchError.THUNK_DEST_NOT_FOUND)
 
 
 def test_resolve_thunk_tailcall() -> None:
@@ -160,7 +160,7 @@ def test_resolve_thunk_tailcall() -> None:
 
     matcher = SignatureMatcher(TrieNode.new_trie(), bv)
 
-    assert matcher.resolve_thunk(f1) == f2
+    assert matcher.resolve_thunk(f1) == (f2, None)
 
 
 def test_resolve_thunk_jump() -> None:
@@ -239,8 +239,6 @@ def test_does_func_match() -> None:
     def match(*args: Any) -> MatchResult:
         matcher = SignatureMatcher(trie, bv)
         return matcher.does_func_match(*args)
-
-    # visited: Dict[MockFunction, FunctionNode] = {}
 
     # no funcion -> no match
     assert match(None, node("f1", 1), {}) == MatchResult.NO_MATCH
