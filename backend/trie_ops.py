@@ -410,7 +410,7 @@ def link_callgraph(func_info: Dict[FunctionNode, FunctionInfo]) -> None:
         # Wildcard out callees that are masked out.
         def is_valid_call_site(i: int) -> bool:
             if i < 0:
-                return False
+                return True
             for pattern in info.patterns:
                 if i >= len(pattern):
                     return False

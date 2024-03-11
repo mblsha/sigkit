@@ -37,6 +37,28 @@ def test_link_callgraph() -> None:
     assert first_key.name == "f1"
     assert first_key.callees == {0: node("f2", 0, "bin1")}
 
+    # preserve external symbols, if present
+    funcs = {
+        node("f1", 0, "bin1"): info("11", {0: ("f2", ST.ExternalSymbol)}),
+        node("f2", 0, "bin2"): info("22"),
+    }
+    trie_ops.link_callgraph(funcs)
+    items = list(funcs.items())
+    first_key = items[0][0]
+    assert first_key.name == "f1"
+    assert first_key.callees == {0: node("f2", 0, "bin2")}
+
+    # preserve negative offset-callees in same binary
+    funcs = {
+        node("f1", 0, "bin1"): info("11", {-100: ("f2", ST.FunctionSymbol)}),
+        node("f2", 0, "bin1"): info("22"),
+    }
+    trie_ops.link_callgraph(funcs)
+    items = list(funcs.items())
+    first_key = items[0][0]
+    assert first_key.name == "f1"
+    assert first_key.callees == {-100: node("f2", 0, "bin1")}
+
     # "f1" is in different binary, hence None
     funcs = {
         node("f1", 0, "bin1"): info("11", {0: ("f2", ST.FunctionSymbol)}),
