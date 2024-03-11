@@ -368,10 +368,10 @@ def resolve_reference(
         # look for callee from the same object file
         if source_binary in source_to_node:
             result = source_to_node[source_binary]
-            # print('resolved static reference', name, '=', result.name, 'from', source_binary)
+            # resolved static reference
             return result
         else:
-            # sys.stderr.write('Warning: missing static reference ' + name + ' from ' + source_binary + '\n')
+            # missing static reference
             return None
     else:
         # look for callee in a different object file
@@ -380,13 +380,13 @@ def resolve_reference(
             if source != source_binary:
                 possible_callees.append(source_to_node[source])
         if not possible_callees:
-            # sys.stderr.write('Warning: missing extern reference ' + name + ' from ' + source_binary + '\n')
+            # missing extern reference
             return None
         elif len(possible_callees) > 1:
-            # sys.stderr.write('Warning: multiple definitions for external reference ' + name + ' from ' + source_binary + ': '+ ', '.join(map(lambda n: n.name, possible_callees)) + '\n')
+            # multiple definitions for external reference
             return None
         else:
-            # print('resolved extern reference', name, '=', possible_callees[0].name)
+            # resolved extern reference
             return possible_callees[0]
 
 
