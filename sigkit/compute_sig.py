@@ -31,9 +31,10 @@ from binaryninja import (
     log,
     Function,
     BasicBlock,
+    BinaryView,
 )
 
-from ..backend import signaturelibrary
+from ..backend.signaturelibrary import Pattern, FunctionNode, FunctionInfo
 from ..backend import trie_ops
 
 from typing import List, Any, Optional, Set, Dict, NamedTuple, Tuple
@@ -97,9 +98,8 @@ class Relocation(NamedTuple):
     reloc_start: int
     reloc_len: int
 
-def find_relocation(
-    func: Function, start: int, end: int
-) -> Optional[Relocation]:
+
+def find_relocation(func: Function, start: int, end: int) -> Optional[Relocation]:
     """
     Finds a relocation from `start` to `end`. If `start`==`end`, then they will be expanded to the closest instruction boundary
     :param func: function start and end are contained in
@@ -138,7 +138,7 @@ def relocations_mask(func: Function, sig_length: int) -> List[bool]:
             continue
         reloc_info = find_relocation(func, start, end)
         if reloc_info is None:
-            continue # not in a basicblock, don't care.
+            continue  # not in a basicblock, don't care.
         reloc_start, reloc_len = reloc_info
         reloc_start -= func.start
         if reloc_start < 0:
@@ -186,10 +186,16 @@ def get_func_len(func: Function) -> int:
     :param func: BinaryNinja api function
     :return: the distance to the end of the farthest instruction contained within this function
     """
-    return int(min(
-        max(map(lambda bb: bb.start + get_bb_len(bb) - func.start, func.basic_blocks)),
-        func.view.end - func.start,
-    ))
+    return int(
+        min(
+            max(
+                map(
+                    lambda bb: bb.start + get_bb_len(bb) - func.start, func.basic_blocks
+                )
+            ),
+            func.view.end - func.start,
+        )
+    )
 
 
 def compute_callees(func: Function) -> Dict[int, Tuple[str, int]]:
@@ -215,7 +221,9 @@ def compute_callees(func: Function) -> Dict[int, Tuple[str, int]]:
     return callees
 
 
-def function_pattern(func: Function, guess_relocs: bool, sig_length: Optional[int] = None) -> signaturelibrary.Pattern:
+def function_pattern(
+    func: Function, guess_relocs: bool, sig_length: Optional[int] = None
+) -> Pattern:
     """
     Computes a data and mask for the specified function `func` that can be used to identify this function.
     For example, a function may look like:
@@ -248,7 +256,7 @@ def function_pattern(func: Function, guess_relocs: bool, sig_length: Optional[in
     else:
         mask = relocations_mask(func, sig_length)
     # bool to int
-    mask = list(map(int, mask)) # type: ignore
+    mask = list(map(int, mask))  # type: ignore
     data = b""
     i = 0
     while i < len(mask) and func.start + i < func.view.end:
@@ -266,13 +274,13 @@ def function_pattern(func: Function, guess_relocs: bool, sig_length: Optional[in
     while len(mask) and not mask[-1]:
         data = data[: len(data) - 1]
         mask = mask[: len(mask) - 1]
-    return signaturelibrary.Pattern(data, mask)
+    return Pattern(data, mask)
 
 
 # aka generate_function_signature
 def process_function(
     func: Function, guess_relocs: bool
-) -> Tuple[signaturelibrary.FunctionNode, signaturelibrary.FunctionInfo]:
+) -> Tuple[FunctionNode, FunctionInfo]:
     """
     Generates a signature for a given function.
     This signature can be thought of as a semi-unique fingerprint that is able to match copies of this function
@@ -284,10 +292,10 @@ def process_function(
     :return: tuple of (FunctionNode, FunctionInfo)
     """
 
-    func_node = signaturelibrary.FunctionNode(func.name)
+    func_node = FunctionNode(func.name)
     func_node.source_binary = func.view.file.filename
 
-    info = signaturelibrary.FunctionInfo()
+    info = FunctionInfo()
     info.patterns = [function_pattern(func, guess_relocs)]
     info.callees = compute_callees(func)
     if hasattr(func.symbol, "aliases"):
@@ -295,3 +303,18 @@ def process_function(
     else:
         info.aliases = []
     return func_node, info
+
+
+def signatures_for_view(
+    bv: BinaryView, guess_relocs: bool
+) -> Dict[FunctionNode, FunctionInfo]:
+    funcs = {}
+    for func in bv.functions:
+        if bv.get_symbol_at(func.start) is None:
+            continue
+
+        func_node, info = process_function(func, guess_relocs)
+        funcs[func_node] = info
+        log.log_debug("Processed " + func.name)
+
+    return funcs
