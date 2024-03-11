@@ -24,6 +24,8 @@ Ninja's python API. The most useful function is `process_function`, which
 generates a function signature for the specified function.
 """
 
+import os
+
 from ..backend import binja_api
 from binaryninja import (
     LowLevelILInstruction,
@@ -280,6 +282,12 @@ def function_pattern(
     return Pattern(data, mask)
 
 
+def simplify_filename(filename: str) -> str:
+    name = os.path.splitext(filename)[0]
+    name = os.path.splitext(name)[0]
+    return "/".join(name.split("/")[-2:])
+
+
 # aka generate_function_signature
 def process_function(
     func: Function, guess_relocs: bool
@@ -296,7 +304,7 @@ def process_function(
     """
 
     func_node = FunctionNode(func.name)
-    func_node.source_binary = func.view.file.filename
+    func_node.source_binary = simplify_filename(func.view.file.filename)
 
     info = FunctionInfo()
     info.patterns = [function_pattern(func, guess_relocs)]
@@ -314,7 +322,9 @@ def force_analysis_for_view(bv: BinaryView) -> None:
         dirty = False
         for func in bv.functions:
             if func.analysis_skipped:
-                func.analysis_skip_override = FunctionAnalysisSkipOverride.NeverSkipFunctionAnalysis
+                func.analysis_skip_override = (
+                    FunctionAnalysisSkipOverride.NeverSkipFunctionAnalysis
+                )
                 dirty = True
         bv.update_analysis_and_wait()
 
