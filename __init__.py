@@ -21,7 +21,6 @@
 # IN THE SOFTWARE.
 
 from .backend.sig_serialize_fb import SignatureLibraryReader, SignatureLibraryWriter
-from .sigkit.compute_sig import process_function as generate_function_signature
 from .backend.signaturelibrary import TrieNode
 
 
@@ -46,6 +45,7 @@ def save_signature_library(sig_lib: TrieNode, filename: str) -> None:
     with open(filename, "wb") as f:
         f.write(buf)
 
+
 from .backend import binja_api
 from binaryninja import (
     core_ui_enabled,
@@ -63,7 +63,7 @@ from .sigkit.compute_sig import signatures_for_view
 from typing import Optional
 
 if core_ui_enabled():
-    from .sigexplorer import explore_signature_library, App
+    from .sigkit.sigexplorer import explore_signature_library, App
     import binaryninjaui
 
     widget: Optional[App] = None
