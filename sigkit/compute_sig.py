@@ -32,6 +32,7 @@ from binaryninja import (
     Function,
     BasicBlock,
     BinaryView,
+    FunctionAnalysisSkipOverride,
 )
 
 from ..backend.signaturelibrary import Pattern, FunctionNode, FunctionInfo
@@ -248,6 +249,8 @@ def function_pattern(
     :return: list of MaskedByte
     """
 
+    assert not func.analysis_skipped
+
     if sig_length is None:
         sig_length = min(get_func_len(func), 1000)
 
@@ -305,9 +308,22 @@ def process_function(
     return func_node, info
 
 
+def force_analysis_for_view(bv: BinaryView) -> None:
+    dirty = True
+    while dirty:
+        dirty = False
+        for func in bv.functions:
+            if func.analysis_skipped:
+                func.analysis_skip_override = FunctionAnalysisSkipOverride.NeverSkipFunctionAnalysis
+                dirty = True
+        bv.update_analysis_and_wait()
+
+
 def signatures_for_view(
     bv: BinaryView, guess_relocs: bool
 ) -> Dict[FunctionNode, FunctionInfo]:
+    force_analysis_for_view(bv)
+
     funcs = {}
     for func in bv.functions:
         if bv.get_symbol_at(func.start) is None:
