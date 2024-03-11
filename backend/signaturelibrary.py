@@ -38,6 +38,7 @@ from typing import (
     Any,
     Set,
     Iterator,
+    Tuple,
 )
 from dataclasses import dataclass, field
 from .binja_api import SymbolType
@@ -206,6 +207,9 @@ class Pattern:
     def to_bytes(self) -> bytes:
         return bytes(map(lambda b: b.value, self._array))
 
+    def __repr__(self) -> str:
+        return f"<{self.__str__()}>"
+
     def __str__(self) -> str:
         return "".join(map(str, self._array))
 
@@ -289,7 +293,7 @@ class FunctionInfo:
     patterns: List[Pattern] = field(default_factory=list)
 
     # dictionary of {offset: (destination name, `ReferenceType`)}; other symbols this function calls
-    callees: Dict[int, Dict[str, SymbolType]] = field(default_factory=dict)
+    callees: Dict[int, Tuple[str, SymbolType]] = field(default_factory=dict)
 
     # list of string containing other possible names that could link to this function
     aliases: List[str] = field(default_factory=list)
@@ -317,6 +321,7 @@ class FunctionNode:
 
     # Forms a callgraph with other `FunctionNodes`.
     # Dict of {call_offset: destination}.
+    # if FunctionNode is None, it is a wildcard
     callees: Dict[int, Optional["FunctionNode"]] = field(default_factory=dict)
 
     # Number of places this node is in its signature trie

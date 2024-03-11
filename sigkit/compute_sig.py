@@ -37,7 +37,7 @@ from binaryninja import (
     FunctionAnalysisSkipOverride,
 )
 
-from ..backend.signaturelibrary import Pattern, FunctionNode, FunctionInfo
+from ..backend.signaturelibrary import Pattern, FunctionNode, FunctionInfo, TrieNode
 from ..backend import trie_ops
 
 from typing import List, Any, Optional, Set, Dict, NamedTuple, Tuple
@@ -344,3 +344,11 @@ def signatures_for_view(
         log.log_debug("Processed " + func.name)
 
     return funcs
+
+
+def trie_for_view(bv: BinaryView, guess_relocs: bool) -> TrieNode:
+    funcs = signatures_for_view(bv, guess_relocs)
+    trie = TrieNode.new_trie()
+    trie_ops.trie_insert_funcs(trie, funcs)
+    # trie_ops.finalize_trie(trie, funcs)
+    return trie

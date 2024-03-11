@@ -1,3 +1,4 @@
+from pprint import pprint
 from . import trie_ops
 from .binja_api import SymbolType as ST
 
@@ -22,3 +23,49 @@ def test_resolve_reference() -> None:
         )
         == None
     )
+
+
+def test_link_callgraph() -> None:
+    # should add callee to node
+    funcs = {
+        node("f1", 0, "bin1"): info("11", {0: ("f2", ST.FunctionSymbol)}),
+        node("f2", 0, "bin1"): info("22"),
+    }
+    trie_ops.link_callgraph(funcs)
+    items = list(funcs.items())
+    first_key = items[0][0]
+    assert first_key.name == "f1"
+    assert first_key.callees == {0: node("f2", 0, "bin1")}
+
+    # "f1" is in different binary, hence None
+    funcs = {
+        node("f1", 0, "bin1"): info("11", {0: ("f2", ST.FunctionSymbol)}),
+        node("f2", 0, "bin2"): info("22"),
+    }
+    trie_ops.link_callgraph(funcs)
+    items = list(funcs.items())
+    first_key = items[0][0]
+    assert first_key.name == "f1"
+    assert first_key.callees == {0: None}
+
+    # "f2" call is outside the pattern, hence None
+    funcs = {
+        node("f1", 0, "bin1"): info("", {0: ("f2", ST.FunctionSymbol)}),
+        node("f2", 0, "bin1"): info("22"),
+    }
+    trie_ops.link_callgraph(funcs)
+    items = list(funcs.items())
+    first_key = items[0][0]
+    assert first_key.name == "f1"
+    assert first_key.callees == {0: None}
+
+    # "f2" call is on a wildcard, hence None
+    funcs = {
+        node("f1", 0, "bin1"): info("??", {0: ("f2", ST.FunctionSymbol)}),
+        node("f2", 0, "bin1"): info("22"),
+    }
+    trie_ops.link_callgraph(funcs)
+    items = list(funcs.items())
+    first_key = items[0][0]
+    assert first_key.name == "f1"
+    assert first_key.callees == {0: None}

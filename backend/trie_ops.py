@@ -40,7 +40,7 @@ from functools import reduce
 import operator
 
 from .binja_api import SymbolType
-from .signaturelibrary import TrieNode, FunctionInfo, FunctionNode, Pattern
+from .signaturelibrary import TrieNode, FunctionInfo, FunctionNode, Pattern, MaskedByte
 from typing import List, Set, Dict, Optional, Tuple
 
 
@@ -393,8 +393,6 @@ def resolve_reference(
 def link_callgraph(func_info: Dict[FunctionNode, FunctionInfo]) -> None:
     """
     Construct the callgraph based on `FunctionInfo` and link all the `FunctionNode`s together.
-    :param func_info:
-    :return:
     """
     name_to_source_to_node: Dict[str, Dict[str, FunctionNode]] = defaultdict(dict)
     for node, info in func_info.items():
@@ -416,7 +414,7 @@ def link_callgraph(func_info: Dict[FunctionNode, FunctionInfo]) -> None:
             for pattern in info.patterns:
                 if i >= len(pattern):
                     return False
-                if not pattern[i]:
+                if pattern[i] == MaskedByte.wildcard():
                     return False
             return True
 

@@ -98,3 +98,13 @@ def test_pattern_mask() -> None:
 
     p = Pattern.from_str("1234")
     assert list(p.mask()) == [1, 1]
+
+
+def test_pattern_index() -> None:
+    p = Pattern.from_str("??34")
+    assert p[0] == MaskedByte.wildcard()
+    assert p[1] == MaskedByte.new(0x34, 1)
+
+    p = Pattern.from_str("1234")
+    assert p[0] == MaskedByte.new(0x12, 1)
+    assert p[1] == MaskedByte.new(0x34, 1)

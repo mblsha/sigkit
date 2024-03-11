@@ -218,8 +218,8 @@ def test_compute_func_callees() -> None:
 
 
 def test_does_func_match() -> None:
-    node_f1_disambiguation1 = node("f1d", 1, p("9922"), 0)
-    node_f1_disambiguation2 = node("f1d", 1, p("1122"), 0)
+    node_f1_disambiguation1 = node("f1d", 1, pattern=p("9922"), pattern_offset=0)
+    node_f1_disambiguation2 = node("f1d", 1, pattern=p("1122"), pattern_offset=0)
     funcs = {
         node("f1"): info("??2233445566778899"),
         node("f2"): info("11??33445566778899"),
