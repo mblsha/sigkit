@@ -421,7 +421,7 @@ class TrieNode:
             for k in self.children:
                 c = self.children[k]
                 result += "  " * depth + f"{k}: {c._to_str(depth+1)}\n"
-            result += "  "*(depth-1) + ">"
+            result += "  " * (depth - 1) + ">"
         else:
             result += ">"
         return result
@@ -485,8 +485,14 @@ class TrieNode:
         self.children = {split_node.pattern[0]: split_node}
 
     def _add_child(self, child: "TrieNode") -> None:
-        assert child.pattern[0] not in self.children
-        assert isinstance(child.pattern[0], MaskedByte)
+        try:
+            assert len(child.pattern) > 0
+            assert child.pattern[0] not in self.children
+            assert isinstance(child.pattern[0], MaskedByte)
+        except AssertionError:
+            print(f"child: {child}")
+            print(f"self: {self}")
+            raise
         self.children[child.pattern[0]] = child
 
     def insert(self, pattern: Pattern, value: FunctionNode) -> bool:
@@ -499,13 +505,16 @@ class TrieNode:
         :param value: `FunctionNode`
         :return: True if the function node was inserted, or False if it was rejected
         """
-        if len(pattern) < 8:
+        if len(pattern) < MIN_PATTERN_LENGTH:
             sys.stderr.write(
                 f"Too short pattern for {value}: got {len(pattern)} want {MIN_PATTERN_LENGTH}\n"
             )
             return False
-        if sum(map(lambda e: e.mask, pattern)) < 8:
-            sys.stderr.write(f"Too ambiguous mask for {value}\n")
+        non_ambiguous_length = sum(map(lambda e: e.mask, pattern))
+        if non_ambiguous_length < MIN_PATTERN_LENGTH:
+            sys.stderr.write(
+                f"Too ambiguous mask for {value}: got {non_ambiguous_length} want {MIN_PATTERN_LENGTH}\n"
+            )
             return False
 
         i = 0

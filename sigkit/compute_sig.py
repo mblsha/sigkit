@@ -330,7 +330,7 @@ def force_analysis_for_view(bv: BinaryView) -> None:
 
 
 def signatures_for_view(
-    bv: BinaryView, guess_relocs: bool
+    bv: BinaryView, guess_relocs: bool = False
 ) -> Dict[FunctionNode, FunctionInfo]:
     force_analysis_for_view(bv)
 
@@ -346,7 +346,7 @@ def signatures_for_view(
     return funcs
 
 
-def trie_for_view(bv: BinaryView, guess_relocs: bool) -> TrieNode:
+def trie_for_view(bv: BinaryView, guess_relocs: bool = False) -> TrieNode:
     funcs = signatures_for_view(bv, guess_relocs)
     trie = TrieNode.new_trie()
     trie_ops.trie_insert_funcs(trie, funcs)

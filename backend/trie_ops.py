@@ -108,9 +108,13 @@ def is_signature_subset(
         return True
     if int(a is None) > int(b is None):
         return False
-    assert isinstance(a, FunctionNode)
-    assert isinstance(b, FunctionNode)
-    assert a in func_info
+    try:
+        assert a is not None
+        assert b is not None
+        assert a in func_info
+    except AssertionError:
+        print(f"a: {a}, b: {b}, func_info: {len(func_info)}")
+        raise
 
     # this is essentially a dfs on the callgraph. if we encounter a backedge,
     # treat it optimistically, implying that the callers match if the callees match.
@@ -296,8 +300,8 @@ def can_substitute(a: Optional[FunctionNode], b: Optional[FunctionNode]) -> bool
         return True
     if (b is None) != (a is None):
         return False
-    assert isinstance(a, FunctionNode)
-    assert isinstance(b, FunctionNode)
+    assert a is not None
+    assert b is not None
 
     if not are_names_compatible(a, b):
         return False

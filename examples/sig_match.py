@@ -74,6 +74,7 @@ class SignatureMatcher(object):
         self._matches: Dict[Function, FunctionNode] = {}
         self._matches_inv: Dict[FunctionNode, Function] = {}
         self.results: Dict[Function, FunctionNode] = {}
+        self.results_errors: Dict[Function, Optional[MatchError]] = {}
 
         self._cur_match_debug = ""
 
@@ -234,9 +235,13 @@ class SignatureMatcher(object):
         func_data = self.bv.read(func.start, func_len)
         trie_matches = self.sig_trie.find(func_data)
 
-        best_score, results = MatchResult.NO_MATCH, []
+        best_score = MatchResult.NO_MATCH
+        results = []
         for candidate_func in trie_matches:
             score, error = self.does_func_match(func, candidate_func, {})
+            if score.value >= best_score.value:
+                self.results_errors[func] = error
+
             if score.value > best_score.value:
                 results = [candidate_func]
                 best_score = score
@@ -247,7 +252,7 @@ class SignatureMatcher(object):
             assert best_score == MatchResult.NO_MATCH
             return results
         elif len(results) > 1:
-            print(func.name, "=>", "deferred at level", best_score, results)
+            # print(func.name, "=>", "deferred at level", best_score, results)
             return results
 
         match = results[0]
